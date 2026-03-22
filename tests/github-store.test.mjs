@@ -424,3 +424,18 @@ test('closeSubmissions is idempotent — succeeds even if already closed', async
   const store = new GitHubStore({ token: 'tok', repoFullName: 'a/e' })
   await expect(store.closeSubmissions()).resolves.not.toThrow()
 })
+
+test('archiveSpace sends PATCH with archived:true', async () => {
+  const calls = []
+  mockFetch((url, opts) => {
+    calls.push({ method: opts.method ?? 'GET', url, body: opts.body })
+    return { status: 200, body: { archived: true, full_name: 'alice/my-event' } }
+  })
+  const store = new GitHubStore({ token: 'tok', repoFullName: 'alice/my-event' })
+  await store.archiveSpace()
+  const patchCall = calls.find(c => c.method === 'PATCH')
+  expect(patchCall).toBeTruthy()
+  expect(patchCall.url.includes('/repos/alice/my-event')).toBe(true)
+  const body = JSON.parse(patchCall.body)
+  expect(body.archived).toBe(true)
+})
