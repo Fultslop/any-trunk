@@ -1,6 +1,6 @@
 import { GitHubStore } from '../../lib/github-store.js'
 import { renderOrganizer } from './organizer.js'
-import { renderParticipant } from './participant.js'
+import { renderParticipant, renderOnboardingGate } from './participant.js'
 import { renderObserver } from './observer.js'
 
 // ── CONFIG ────────────────────────────────────────────────────────────────
@@ -24,6 +24,15 @@ async function main() {
   if (mode === 'observer') {
     await renderObserver(repoParam)
     return
+  }
+
+  // Participant gate: check auth state before triggering OAuth redirect
+  if (mode === 'participant') {
+    const hasCode = new URLSearchParams(location.search).has('code')
+    if (!GitHubStore.hasToken() && !hasCode) {
+      renderOnboardingGate(repoParam, { clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, corsProxy: CORS_PROXY })
+      return
+    }
   }
 
   const store = await GitHubStore.init({

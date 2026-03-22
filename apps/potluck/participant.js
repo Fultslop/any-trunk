@@ -1,3 +1,4 @@
+import { GitHubStore } from '../../lib/github-store.js'
 import { esc, setStatus } from './helpers.js'
 
 export async function renderParticipant(store, repoParam, inviteParam) {
@@ -107,5 +108,42 @@ export async function renderHistory(store) {
   }
 }
 
-// stub — implemented in GitHub experience improvements plan
-export function renderOnboardingGate(repoParam) {}
+export function renderOnboardingGate(repoParam, { clientId, clientSecret, corsProxy } = {}) {
+  const app = document.getElementById('app')
+  app.innerHTML = `
+    <h1>Potluck</h1>
+    <p class="sub">You've been invited to a Potluck event.</p>
+    <div class="section">
+      <strong>Do you have a GitHub account?</strong>
+      <p style="font-size:0.9rem;color:#555;margin-top:0.5rem">
+        This app uses GitHub to store event data. You'll need an account to participate.
+      </p>
+      <button id="yes-btn" style="margin-right:0.5rem">Yes, sign in with GitHub</button>
+      <button id="no-btn">No, create a free account</button>
+    </div>
+    <div id="onboarding-hint" style="display:none;margin-top:1rem"></div>
+  `
+
+  document.getElementById('yes-btn').onclick = () => {
+    GitHubStore.init({
+      clientId,
+      clientSecret,
+      corsProxy,
+      repoFullName: repoParam,
+    })
+  }
+
+  document.getElementById('no-btn').onclick = () => {
+    const hint = document.getElementById('onboarding-hint')
+    hint.style.display = 'block'
+    hint.innerHTML = `
+      <p>${esc(GitHubStore.onboardingHint())}</p>
+      <a href="${esc(GitHubStore.onboardingUrl())}" target="_blank">
+        Create a free GitHub account →
+      </a>
+      <p style="font-size:0.85rem;color:#555;margin-top:0.75rem">
+        Once you have an account, return to this page and click "Yes, sign in with GitHub".
+      </p>
+    `
+  }
+}
