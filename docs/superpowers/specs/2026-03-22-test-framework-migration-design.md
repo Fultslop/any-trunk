@@ -65,7 +65,7 @@ Vitest requires Node.js 18+, which this project already mandates. No additional 
 
 ### Imports
 
-**Remove** the hand-rolled harness imports and declarations:
+**Remove** the hand-rolled harness declarations (lines 6–27 of the current file):
 
 ```js
 // REMOVE these lines:
@@ -77,6 +77,18 @@ function assertEqual(a, b) {
   if (a !== b) throw new Error(`expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`)
 }
 async function runAll() { ... }
+```
+
+**Do NOT remove** the module-level `lastRedirect` variable and `Object.defineProperty` block that follows (lines 40–45). These are test-specific location tracking code, not harness code:
+
+```js
+// KEEP these lines — they are not part of the harness:
+let lastRedirect = null
+Object.defineProperty(global, 'location', {
+  configurable: true,
+  get: () => ({ href: lastRedirect ?? 'http://localhost/', search: '' }),
+  set: (v) => { lastRedirect = typeof v === 'string' ? v : v.href },
+})
 ```
 
 **Add** Vitest imports at the top:
@@ -95,20 +107,21 @@ import { test, expect, beforeEach } from 'vitest'
 beforeEach(() => {
   reset()
   clearFetch()
+  lastRedirect = null
 })
 ```
 
-Vitest calls `beforeEach` automatically before every `test()` block, providing the same isolation the old `runAll()` loop gave.
+`reset()` and `clearFetch()` are synchronous, so no `await` is needed. `lastRedirect = null` resets the module-level redirect tracker between tests, preventing state from leaking across tests that call `beginAuth()`. Vitest calls `beforeEach` automatically before every `test()` block, providing the same isolation the old `runAll()` loop gave.
 
 ### Assertion replacements
 
 | Old | New |
 |---|---|
 | `assert(cond)` | `expect(cond).toBe(true)` |
-| `assert(cond, msg)` | `expect(cond, msg).toBe(true)` |
+| `assert(cond, msg)` | `expect(cond).toBe(true)` — drop the message; Vitest prints actual vs. expected values in failure output, making inline messages redundant |
 | `assertEqual(a, b)` | `expect(a).toBe(b)` |
 
-Where a test checks that a `let threw = false` + try/catch pattern fires, replace with Vitest's built-in `await expect(fn).rejects.toThrow()` — see below.
+Where a test checks that a `let threw = false` + try/catch pattern fires, replace with Vitest's built-in `rejects` — see below.
 
 ### Exception tests
 
@@ -123,8 +136,10 @@ assert(threw, 'should throw on state mismatch')
 Replace with:
 
 ```js
-await expect(() => GitHubStore.completeAuth()).rejects.toThrow()
+await expect(GitHubStore.completeAuth()).rejects.toThrow()
 ```
+
+Pass the **promise** directly to `expect()` — not a function wrapper. `rejects` expects a promise, not a thunk. Wrapping in `() => ...` would create a function that never executes, causing the test to incorrectly pass. No specific error message matcher is needed — the existing tests only check that an exception is thrown, not its message.
 
 ### Removal of `runAll()`
 
@@ -137,7 +152,7 @@ await expect(() => GitHubStore.completeAuth()).rejects.toThrow()
 | File | Change |
 |---|---|
 | `package.json` | Add `vitest` devDependency; update `test` script; add `test:watch` script |
-| `tests/github-store.test.mjs` | Replace harness; add `beforeEach`; update assertions |
+| `tests/github-store.test.mjs` | Replace harness; add `beforeEach`; update assertions — the `.test.mjs` filename suffix is recognised by Vitest's auto-discovery; no rename needed |
 | `tests/helpers/mock-browser.mjs` | No change |
 | `tests/helpers/mock-fetch.mjs` | No change |
 
