@@ -1,38 +1,22 @@
 // tests/github-store.test.mjs
+import { test, expect, beforeEach } from 'vitest'
 import { reset } from './helpers/mock-browser.mjs'
 import { clearFetch, mockFetch } from './helpers/mock-fetch.mjs'
 import { GitHubStore } from '../lib/github-store.js'
 
-let passed = 0, failed = 0
-const _queue = []
-
-function test(name, fn) { _queue.push({ name, fn }) }
-function assert(cond, msg) { if (!cond) throw new Error(msg || 'assertion failed') }
-function assertEqual(a, b) {
-  if (a !== b) throw new Error(`expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`)
-}
-
-async function runAll() {
-  for (const { name, fn } of _queue) {
-    reset()
-    clearFetch()
-    try {
-      await fn()
-      console.log('✓', name); passed++
-    } catch(e) {
-      console.error('✗', name, '\n ', e.message); failed++
-    }
-  }
-  console.log(`\n${passed} passed, ${failed} failed`)
-}
+beforeEach(() => {
+  reset()
+  clearFetch()
+  lastRedirect = null
+})
 
 // ── Tests follow below each Task ──
 
 // Placeholder to verify the harness works
 test('GitHubStore can be instantiated', () => {
   const s = new GitHubStore({ clientId: 'id', clientSecret: 'secret' })
-  assert(!s.isAuthenticated, 'should not be authenticated with no token')
-  assert(s.username === null, 'username should be null')
+  expect(!s.isAuthenticated).toBe(true)
+  expect(s.username === null).toBe(true)
 })
 
 // Track redirects: override global.location with a settable property descriptor
@@ -47,17 +31,17 @@ Object.defineProperty(global, 'location', {
 test('beginAuth stores credentials and state in sessionStorage', () => {
   GitHubStore.beginAuth('my-client-id', 'my-secret')
   const stored = JSON.parse(sessionStorage.getItem('gh:auth'))
-  assertEqual(stored.clientId, 'my-client-id')
-  assertEqual(stored.clientSecret, 'my-secret')
-  assert(stored.state && stored.state.length > 8, 'state should be a random string')
+  expect(stored.clientId).toBe('my-client-id')
+  expect(stored.clientSecret).toBe('my-secret')
+  expect(stored.state && stored.state.length > 8).toBe(true)
 })
 
 test('beginAuth redirects to GitHub OAuth URL', () => {
   lastRedirect = null
   GitHubStore.beginAuth('my-client-id', 'my-secret')
-  assert(lastRedirect?.includes('github.com/login/oauth/authorize'), 'should redirect to GitHub')
-  assert(lastRedirect?.includes('client_id=my-client-id'), 'should include client_id')
-  assert(lastRedirect?.includes('scope=repo'), 'should request repo scope')
+  expect(lastRedirect?.includes('github.com/login/oauth/authorize')).toBe(true)
+  expect(lastRedirect?.includes('client_id=my-client-id')).toBe(true)
+  expect(lastRedirect?.includes('scope=repo')).toBe(true)
 })
 
 test('completeAuth exchanges code for token and stores it', async () => {
@@ -82,10 +66,10 @@ test('completeAuth exchanges code for token and stores it', async () => {
   })
 
   const store = await GitHubStore.completeAuth()
-  assert(store.isAuthenticated, 'should be authenticated')
-  assertEqual(store.username, 'johndoe')
-  assertEqual(sessionStorage.getItem('gh:token'), 'gho_testtoken')
-  assertEqual(sessionStorage.getItem('gh:username'), 'johndoe')
+  expect(store.isAuthenticated).toBe(true)
+  expect(store.username).toBe('johndoe')
+  expect(sessionStorage.getItem('gh:token')).toBe('gho_testtoken')
+  expect(sessionStorage.getItem('gh:username')).toBe('johndoe')
 })
 
 test('completeAuth throws if state does not match', async () => {
@@ -97,9 +81,7 @@ test('completeAuth throws if state does not match', async () => {
     get: () => ({ search: '?code=x&state=wrong-state' }),
     set: () => {},
   })
-  let threw = false
-  try { await GitHubStore.completeAuth() } catch { threw = true }
-  assert(threw, 'should throw on state mismatch')
+  await expect(GitHubStore.completeAuth()).rejects.toThrow()
 })
 
 test('init rehydrates from sessionStorage when token exists', async () => {
@@ -112,8 +94,8 @@ test('init rehydrates from sessionStorage when token exists', async () => {
   })
 
   const store = await GitHubStore.init({ clientId: 'id', clientSecret: 'secret' })
-  assert(store.isAuthenticated)
-  assertEqual(store.username, 'existinguser')
+  expect(store.isAuthenticated).toBe(true)
+  expect(store.username).toBe('existinguser')
 })
 
 test('createSpace creates a private repo and writes _event.json', async () => {
@@ -131,15 +113,15 @@ test('createSpace creates a private repo and writes _event.json', async () => {
   const store = new GitHubStore({ token: 'tok', _username: 'johndoe' })
   const repoFullName = await store.createSpace('potluck-test')
 
-  assertEqual(repoFullName, 'johndoe/potluck-test')
+  expect(repoFullName).toBe('johndoe/potluck-test')
   const repoCall = calls.find(c => c.url.includes('/user/repos'))
-  assert(repoCall?.body?.private === true, 'repo should be private')
+  expect(repoCall?.body?.private === true).toBe(true)
   const eventCall = calls.find(c => c.url.includes('_event.json'))
-  assert(eventCall, 'should write _event.json')
+  expect(!!eventCall).toBe(true)
   const content = JSON.parse(decodeURIComponent(escape(atob(eventCall.body.content))))
-  assertEqual(content.name, 'potluck-test')
-  assertEqual(content.owner, 'johndoe')
-  assert(content.created, '_event.json should have a created timestamp')
+  expect(content.name).toBe('potluck-test')
+  expect(content.owner).toBe('johndoe')
+  expect(!!content.created).toBe(true)
 })
 
 test('_apiCall sends Authorization header with token', async () => {
@@ -150,8 +132,7 @@ test('_apiCall sends Authorization header with token', async () => {
   })
   const store = new GitHubStore({ token: 'gho_mytoken' })
   await store._apiCall('GET', '/user')
-  assert(capturedHeaders?.Authorization === 'Bearer gho_mytoken',
-    'should send bearer token')
+  expect(capturedHeaders?.Authorization === 'Bearer gho_mytoken').toBe(true)
 })
 
 test('join adds collaborator using inviteToken and auto-accepts invitation', async () => {
@@ -174,14 +155,12 @@ test('join adds collaborator using inviteToken and auto-accepts invitation', asy
   await store.join('johndoe/potluck', 'invite-pat')
 
   const addCall = calls.find(c => c.url.includes('/collaborators/bob'))
-  assert(addCall, 'should call PUT /collaborators/bob')
-  assert(addCall.headers.Authorization === 'Bearer invite-pat',
-    'should use inviteToken for collaborator add, not participant token')
+  expect(!!addCall).toBe(true)
+  expect(addCall.headers.Authorization === 'Bearer invite-pat').toBe(true)
 
   const acceptCall = calls.find(c => c.url.includes('invitations/99') && c.method === 'PATCH')
-  assert(acceptCall, 'should call PATCH /invitations/99')
-  assert(acceptCall.headers.Authorization === 'Bearer participant-token',
-    'should use participant own token to accept')
+  expect(!!acceptCall).toBe(true)
+  expect(acceptCall.headers.Authorization === 'Bearer participant-token').toBe(true)
 })
 
 test('join is idempotent — skips accept step when already a collaborator', async () => {
@@ -197,7 +176,7 @@ test('join is idempotent — skips accept step when already a collaborator', asy
   await store.join('johndoe/potluck', 'invite-pat')
 
   const inviteCalls = calls.filter(c => c.url.includes('repository_invitations'))
-  assert(inviteCalls.length === 0, 'should not touch invitations when already a collaborator')
+  expect(inviteCalls.length === 0).toBe(true)
 })
 
 test('write creates a new file when it does not exist', async () => {
@@ -212,11 +191,11 @@ test('write creates a new file when it does not exist', async () => {
   await store.write('bob/dish.json', { dish: 'lasagna' })
 
   const putCall = calls.find(c => c.method === 'PUT')
-  assert(putCall, 'should PUT the file')
+  expect(!!putCall).toBe(true)
   const body = JSON.parse(putCall.body)
-  assert(!body.sha, 'should not include sha for new file')
+  expect(!body.sha).toBe(true)
   const decoded = JSON.parse(decodeURIComponent(escape(atob(body.content))))
-  assertEqual(decoded.dish, 'lasagna')
+  expect(decoded.dish).toBe('lasagna')
 })
 
 test('write includes SHA when file already exists', async () => {
@@ -235,7 +214,7 @@ test('write includes SHA when file already exists', async () => {
 
   const putCall = calls.find(c => c.method === 'PUT')
   const body = JSON.parse(putCall.body)
-  assertEqual(body.sha, 'abc123')
+  expect(body.sha).toBe('abc123')
 })
 
 test('append writes to a timestamped path under prefix', async () => {
@@ -249,14 +228,14 @@ test('append writes to a timestamped path under prefix', async () => {
   await store.append({ dish: 'tiramisu' }, { prefix: 'bob' })
 
   const putCall = calls.find(c => c.method === 'PUT')
-  assert(putCall, 'should PUT a file')
-  assert(putCall.url.includes('/bob/'), 'path should include prefix')
-  assert(putCall.url.endsWith('.json'), 'path should end in .json')
+  expect(!!putCall).toBe(true)
+  expect(putCall.url.includes('/bob/')).toBe(true)
+  expect(putCall.url.endsWith('.json')).toBe(true)
   // Extract timestamp from URL path: .../contents/bob/2026-03-21T...Z.json
   const match = putCall.url.match(/\/bob\/(.+\.json)/)
-  assert(match, 'should have timestamp filename')
+  expect(!!match).toBe(true)
   const rawName = decodeURIComponent(match[1].replace('.json', ''))
-  assert(rawName.match(/^\d{4}-/), 'filename should start with year')
+  expect(!!rawName.match(/^\d{4}-/)).toBe(true)
 })
 
 test('read returns parsed JSON for an existing file', async () => {
@@ -266,14 +245,14 @@ test('read returns parsed JSON for an existing file', async () => {
 
   const store = new GitHubStore({ token: 'tok', repoFullName: 'johndoe/potluck' })
   const result = await store.read('bob/dish.json')
-  assertEqual(result.dish, 'lasagna')
+  expect(result.dish).toBe('lasagna')
 })
 
 test('read returns null for a missing file', async () => {
   mockFetch(() => ({ status: 404, body: { message: 'Not Found' } }))
   const store = new GitHubStore({ token: 'tok', repoFullName: 'johndoe/potluck' })
   const result = await store.read('bob/dish.json')
-  assert(result === null)
+  expect(result === null).toBe(true)
 })
 
 test('list returns sorted array of { path, sha } for files only', async () => {
@@ -287,9 +266,9 @@ test('list returns sorted array of { path, sha } for files only', async () => {
   }))
   const store = new GitHubStore({ token: 'tok', repoFullName: 'johndoe/potluck' })
   const result = await store.list('bob')
-  assertEqual(result.length, 2)
-  assertEqual(result[0].path, 'bob/2026-03-21T14:00:00.000Z.json')
-  assertEqual(result[1].sha, 'sha2')
+  expect(result.length).toBe(2)
+  expect(result[0].path).toBe('bob/2026-03-21T14:00:00.000Z.json')
+  expect(result[1].sha).toBe('sha2')
 })
 
 test('readAll returns participants with entries and latest, skipping _ entries', async () => {
@@ -328,33 +307,33 @@ test('readAll returns participants with entries and latest, skipping _ entries',
   const store = new GitHubStore({ token: 'tok', repoFullName: 'johndoe/potluck' })
   const result = await store.readAll()
 
-  assertEqual(result.length, 2)
+  expect(result.length).toBe(2)
 
   const bob = result.find(r => r.username === 'bob')
-  assert(bob, 'bob should be in results')
-  assertEqual(bob.entries.length, 2)
-  assertEqual(bob.latest.dish, 'tiramisu')
+  expect(!!bob).toBe(true)
+  expect(bob.entries.length).toBe(2)
+  expect(bob.latest.dish).toBe('tiramisu')
 
   const tom = result.find(r => r.username === 'tom')
-  assert(tom, 'tom should be in results')
-  assertEqual(tom.entries.length, 0)
-  assert(tom.latest === null, 'latest should be null when no entries')
+  expect(!!tom).toBe(true)
+  expect(tom.entries.length).toBe(0)
+  expect(tom.latest === null).toBe(true)
 
   // _event.json must be excluded
-  assert(!result.find(r => r.username === '_event.json'), '_event.json should be excluded')
-  assert(!result.find(r => r.username === '_archive'), '_archive dir should be excluded')
+  expect(!result.find(r => r.username === '_event.json')).toBe(true)
+  expect(!result.find(r => r.username === '_archive')).toBe(true)
 })
 
 test('saveRecentRepo stores repoFullName in localStorage', () => {
   GitHubStore.saveRecentRepo('johndoe/potluck-test')
   const stored = GitHubStore.getRecentRepos()
-  assert(stored.includes('johndoe/potluck-test'), 'should be in recent repos')
+  expect(stored.includes('johndoe/potluck-test')).toBe(true)
 })
 
 test('getRecentRepos deduplicates and caps at 5', () => {
   for (let i = 0; i < 7; i++) GitHubStore.saveRecentRepo(`owner/repo-${i}`)
   const stored = GitHubStore.getRecentRepos()
-  assert(stored.length <= 5, 'should cap at 5 recent repos')
+  expect(stored.length <= 5).toBe(true)
 })
 
 test('saveRecentRepo moves existing entry to front on re-save', () => {
@@ -362,9 +341,7 @@ test('saveRecentRepo moves existing entry to front on re-save', () => {
   GitHubStore.saveRecentRepo('owner/repo-b')
   GitHubStore.saveRecentRepo('owner/repo-a')  // re-save moves to front
   const stored = GitHubStore.getRecentRepos()
-  assertEqual(stored[0], 'owner/repo-a')
-  assertEqual(stored[1], 'owner/repo-b')
-  assertEqual(stored.length, 2)
+  expect(stored[0]).toBe('owner/repo-a')
+  expect(stored[1]).toBe('owner/repo-b')
+  expect(stored.length).toBe(2)
 })
-
-runAll()
