@@ -80,17 +80,21 @@ POST /oauth/token
 POST /spaces/register
   body:    { repo: string, token: string }
   returns: { inviteCode: string }
-  does:    stores organizer's OAuth token in KV keyed by repo;
-           generates and stores an opaque random invite code mapped to that repo;
-           returns the invite code to the app
-           called once by organizer after createSpace()
+  does:    idempotent — if a code already exists for this repo, returns it unchanged
+           (re-calling does NOT generate a new code; existing join URLs stay valid);
+           otherwise: stores organizer's OAuth token in KV keyed by repo,
+           generates and stores an opaque random invite code, returns it;
+           called by organizer after createSpace(); safe to call again if code is lost
 
 POST /spaces/invite
   body:    { repo: string, username: string, inviteCode: string }
   returns: 200 or 403
-  does:    validates invite code against KV;
-           calls PUT /repos/{repo}/collaborators/{username}
-           using the stored organizer token — token never exposed to client
+  does:    validates invite code against KV — returns 403 if invalid;
+           always calls PUT /repos/{repo}/collaborators/{username}
+           using the stored organizer token (GitHub returns 204 in both the
+           "invitation created" and "already a collaborator" cases — the Worker
+           treats both as success and returns 200 either way);
+           token never exposed to client
            fixes D3
 ```
 
@@ -101,6 +105,10 @@ POST /spaces/invite
 **Worker KV stores:**
 - `repo:{repo}:token` → organizer's OAuth token
 - `repo:{repo}:inviteCode` → opaque random string
+
+`{repo}` in KV keys is the full `{owner}/{repo}` string with `/` URL-encoded as `%2F`
+(e.g., `repo:alice%2Fbirthday-2026-04-01:token`). Implementations on platforms where
+key separators conflict with `/` must apply the same encoding to remain interoperable.
 
 The invite code in the participant URL is a short random string — not a PAT. If it leaks, it can only be used to add oneself as a collaborator to that specific repo during the open signup window. The organizer token never leaves the Worker.
 
@@ -136,10 +144,11 @@ class WorkerGitHubStore extends GitHubStore {
   //   workerUrl:  base URL of the deployed Worker
   //   no clientSecret — lives in Worker env
 
-  // Overrides — same external signatures, different internals
+  // Overrides with signature change
   static beginAuth(clientId, workerUrl)
-  //   stores workerUrl in sessionStorage instead of clientSecret
+  //   workerUrl replaces clientSecret — stores workerUrl in sessionStorage
 
+  // Overrides — same signature, different internals
   static async completeAuth()
   //   POSTs { code } to {workerUrl}/oauth/token instead of cors-anywhere
   //   Worker exchanges code for token using stored client_secret; returns access_token
@@ -150,15 +159,24 @@ class WorkerGitHubStore extends GitHubStore {
   // New — called by organizer after createSpace()
   async register()
   //   POSTs { repo, token } to {workerUrl}/spaces/register
-  //   Worker stores organizer token; returns inviteCode
-  //   inviteCode stored on instance for generating the join URL
+  //   Worker is idempotent: returns existing code if already registered for this repo
+  //   inviteCode persisted to localStorage keyed by repo (gifts:{repo}:inviteCode)
+  //   so the join URL survives page refresh; if localStorage is cleared, calling
+  //   register() again is safe — Worker returns the same code, join URLs stay valid
 
-  // Override — inviteCode replaces raw PAT
+  // Override — same positional signature as base class; inviteCode replaces raw PAT
   async join(repoFullName, inviteCode)
   //   POSTs { repo, username, inviteCode } to {workerUrl}/spaces/invite
-  //   Worker validates code and calls PUT /collaborators using stored organizer token
-  //   then auto-accepts invitation (same base class logic)
+  //   Worker validates code and calls PUT /collaborators/{username} using stored organizer token
+  //   Worker always returns 200 on success (GitHub 204 for both new invite and already-collaborator)
+  //   then calls this._autoAcceptInvitation(repoFullName) for the accept step
 }
+
+// Required base class refactor:
+// The base class GitHubStore.join() must extract its auto-accept logic into a
+// protected method _autoAcceptInvitation(repoFullName) so WorkerGitHubStore.join()
+// can call it without duplicating code. This is the only change required to the base
+// class — all existing behaviour and tests remain unchanged.
 ```
 
 ---
@@ -181,7 +199,7 @@ class WorkerGitHubStore extends GitHubStore {
 | `_event.json` metadata | ✓ | ✓ |
 | `sessionStorage` rehydration lifecycle | ✓ | ✓ |
 
-Only `completeAuth()` and `join()` change internally — and their signatures stay the same. The data layer is identical.
+`completeAuth()` and `join()` change internally but keep the same positional signatures. `beginAuth()` changes signature (`workerUrl` replaces `clientSecret`). All data methods are completely unchanged. The data layer is identical.
 
 > *"AnyTrunk apps are written against the same data API regardless of backend; the Worker only changes how trust is established, not what you do with it once it is."*
 
@@ -213,6 +231,8 @@ The gifts app is strictly better UX for organizers — fewer steps, no GitHub Se
 | Organizer creates invite | Manual PAT on GitHub Settings | Click — Worker handles it |
 | Invite URL contains | Raw Fine-Grained PAT | Opaque invite code |
 | Library import | `github-store.js` | `github-store-worker.js` |
+| `beginAuth()` signature | `(clientId, clientSecret)` | `(clientId, workerUrl)` |
+| `join()` second argument | Raw Fine-Grained PAT | Opaque invite code (same positional signature, different semantics) |
 | Developer must deploy | Nothing | A Worker |
 
 ---
@@ -229,7 +249,9 @@ The gifts app is strictly better UX for organizers — fewer steps, no GitHub Se
     2026-03-22T10:05:00.000Z.json   # { item: "Blender" }
 ```
 
-**Claim resolution:** first claim per item wins — determined by lexicographic timestamp sort across all participant entries. No locking, no transactions. If two people claim the same item simultaneously, both writes succeed; the app surfaces the conflict and lets them sort it out. Same eventual-consistency-via-append-only-log model as potluck.
+**Claim resolution:** first claim per item wins — determined by lexicographic timestamp sort across all participant entries. No locking, no transactions. If two people claim the same item simultaneously, both writes succeed; the app shows both claimants for that item with a "conflict" label and the organizer resolves it out of band. Same eventual-consistency-via-append-only-log model as potluck.
+
+**`write()` and the `_` prefix:** `write()` does not enforce the `_` prefix restriction — that restriction applies only to `readAll()`, which skips `_`-prefixed entries. `store.write('_wishlist.json', ...)` is valid; participants access it directly via `store.read('_wishlist.json')`, bypassing `readAll()` entirely.
 
 **`_wishlist.json` schema:**
 ```json
@@ -310,8 +332,11 @@ Written by participants via `store.append({ item }, { prefix: username })`.
 │  Coffee maker     [Claim]               │
 │  Blender          You ✓                 │
 │  Cookbook         claimed by carol      │
+│  Kettle           ⚠ claimed by bob, dan │
 └─────────────────────────────────────────┘
 ```
+
+Conflict display: when multiple participants have claimed the same item, the item shows all claimants and a warning icon. No automated resolution — organizer contacts claimants out of band.
 
 No CSS framework. Plain styles, mobile-readable. Same visual language as potluck.
 
@@ -374,7 +399,9 @@ The gifts app introduces the need for a second tutorial alongside the existing `
 | `docs/tutorial-potluck.md` | Potluck walkthrough — references `tutorial.md` for setup |
 | `docs/tutorial-gifts.md` | Gifts walkthrough — references `tutorial-potluck.md` for shared concepts; focuses on Worker deploy and the differences |
 
-Each file uses the same step-by-step format as `e2e-test.md` with lightweight callouts at moments where library behavior is non-obvious or where gifts diverges from potluck. `docs/e2e-test.md` is retired when the tutorial set is complete.
+Each file uses the same step-by-step format as `e2e-test.md` with lightweight callouts at moments where library behavior is non-obvious or where gifts diverges from potluck. Writing all three tutorial files is an in-scope deliverable of this spec.
+
+`docs/e2e-test.md` covers the full potluck manual test walkthrough (OAuth setup, organizer event creation, participant join, submission, re-submission, observer mode, lifecycle controls, cleanup, and troubleshooting). Its content is fully subsumed by `tutorial.md` + `tutorial-potluck.md`. It is retired — deleted, not archived — as part of the same implementation once the new tutorial files are complete and verified.
 
 ---
 
