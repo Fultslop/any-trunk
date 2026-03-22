@@ -1,0 +1,14 @@
+body { font-family: system-ui, sans-serif; max-width: 520px; margin: 2rem auto; padding: 0 1rem; }
+h1   { font-size: 1.2rem; margin-bottom: 0.25rem; }
+.sub { color: #666; font-size: 0.85rem; margin-bottom: 1.5rem; }
+label { display: block; margin-top: 1rem; font-size: 0.9rem; }
+input { width: 100%; box-sizing: border-box; padding: 0.4rem; margin-top: 0.25rem; border: 1px solid #ccc; border-radius: 4px; }
+button { margin-top: 1rem; padding: 0.5rem 1.2rem; cursor: pointer; }
+table  { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.9rem; }
+td, th { padding: 0.4rem 0.6rem; border-bottom: 1px solid #eee; text-align: left; }
+.section { margin-top: 2rem; }
+hr { border: none; border-top: 1px solid #eee; margin: 1.5rem 0; }
+.badge { background: #e6ffe6; color: #2a7a2a; padding: 0.1rem 0.5rem; border-radius: 3px; font-size: 0.8rem; }
+#status { margin-top: 0.75rem; font-size: 0.9rem; }
+.err { color: #c00; }
+.ok  { color: #2a7a2a; }
