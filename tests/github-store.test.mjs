@@ -439,3 +439,40 @@ test('archiveSpace sends PATCH with archived:true', async () => {
   const body = JSON.parse(patchCall.body)
   expect(body.archived).toBe(true)
 })
+
+test('beginAuth requests delete_repo scope', () => {
+  lastRedirect = null
+  GitHubStore.beginAuth('my-client-id', 'my-secret')
+  expect(lastRedirect?.includes('delete_repo')).toBe(true)
+})
+
+test('deleteSpace sends DELETE to the correct repo URL', async () => {
+  const calls = []
+  mockFetch((url, opts) => {
+    calls.push({ method: opts.method ?? 'GET', url })
+    return { status: 204, body: '' }
+  })
+  const store = new GitHubStore({ token: 'tok', repoFullName: 'alice/my-event' })
+  await store.deleteSpace()
+  const deleteCall = calls.find(c => c.method === 'DELETE')
+  expect(deleteCall).toBeTruthy()
+  expect(deleteCall.url.includes('/repos/alice/my-event')).toBe(true)
+})
+
+test('deleteSpace throws a friendly error when delete_repo scope is missing', async () => {
+  mockFetch(() => ({ status: 403, body: { message: 'Must have admin rights.' } }))
+  const store = new GitHubStore({ token: 'tok', repoFullName: 'alice/my-event' })
+  let msg = ''
+  try { await store.deleteSpace() } catch(e) { msg = e.message }
+  expect(msg.includes('delete_repo')).toBe(true)
+  expect(msg.includes('Re-authorise')).toBe(true)
+})
+
+test('deleteSpace throws on read-only store without making a network call', async () => {
+  mockFetch(() => { throw new Error('should not make a network call') })
+  const store = new GitHubStore({ token: 'tok', repoFullName: 'alice/my-event' })
+  store._readOnly = true
+  let msg = ''
+  try { await store.deleteSpace() } catch(e) { msg = e.message }
+  expect(msg.includes('read-only')).toBe(true)
+})
