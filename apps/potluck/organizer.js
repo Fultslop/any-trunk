@@ -1,5 +1,5 @@
 import { GitHubStore } from '../../lib/github-store.js'
-import { esc, setStatus } from './helpers.js'
+import { esc, setStatus, startPolling } from './helpers.js'
 
 export async function renderOrganizer(store, repoParam) {
   const app = document.getElementById('app')
@@ -218,7 +218,7 @@ export async function renderOrganizerDashboard(store, repoParam) {
   }
 
   await refreshTable()
-  setInterval(refreshTable, 30_000)
+  startPolling(refreshTable, 30_000)
 
   const closeBtn         = document.getElementById('close-btn')
   const lockBtn          = document.getElementById('lock-btn')

@@ -1,5 +1,5 @@
 import { GitHubStore } from '../../lib/github-store.js'
-import { esc } from './helpers.js'
+import { esc, startPolling } from './helpers.js'
 
 export async function renderObserver(repoParam) {
   const app = document.getElementById('app')
@@ -72,5 +72,5 @@ export async function renderObserver(repoParam) {
   }
 
   await refreshObserver()
-  setInterval(refreshObserver, 30_000)
+  startPolling(refreshObserver, 30_000)
 }
