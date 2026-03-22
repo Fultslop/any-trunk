@@ -47,10 +47,6 @@ export async function renderOrganizer(store, repoParam) {
 
 export async function renderOrganizerDashboard(store, repoParam) {
   const app = document.getElementById('app')
-  const patUrl = `https://github.com/settings/personal-access-tokens/new`
-    + `?description=potluck-invite-${encodeURIComponent(store._repoFullName?.split('/')[1] ?? '')}`
-  const joinBase = `${location.origin}${location.pathname}`
-    + `?mode=participant&repo=${store._repoFullName}`
 
   app.innerHTML = `
     <h1>Potluck Organizer</h1>
@@ -60,24 +56,40 @@ export async function renderOrganizerDashboard(store, repoParam) {
     </p>
 
     <div class="section">
-      <strong>Share join link</strong>
-      <ol style="font-size:0.9rem;line-height:2">
-        <li>Create an invite token:
-          <a href="${patUrl}" target="_blank">→ GitHub PAT (administration:write, this repo only)</a>
-        </li>
-        <li>Paste it here:
-          <input id="pat-input" type="text" placeholder="ghp_..." style="display:inline;width:260px" />
-        </li>
-        <li>
-          <button id="copy-btn" disabled>Copy join link</button>
-          <span id="link-preview" style="font-size:0.8rem;color:#666;margin-left:0.5rem"></span>
-        </li>
-      </ol>
-      <p style="font-size:0.8rem;color:#c00;margin-top:0.5rem">
-        ⚠ This link contains a secret token. Anyone with it can join the event.
-        Revoke the token at GitHub after the signup window closes.
-      </p>
-    </div>
+  <strong>Share join link</strong>
+  <p style="font-size:0.9rem;color:#555;margin-top:0.5rem">
+    Create an invite token on GitHub so participants can join:
+  </p>
+  <ol style="font-size:0.9rem;line-height:2.4">
+    <li>
+      <a id="pat-link" href="https://github.com/settings/personal-access-tokens/new" target="_blank">
+        → Open GitHub token page
+      </a>
+    </li>
+    <li>
+      Token name: <code id="pat-name-hint"></code>
+      <button id="copy-name-btn" style="font-size:0.8rem;padding:0.2rem 0.5rem;margin-left:0.4rem">Copy</button>
+    </li>
+    <li>Expiration: <strong>7 days</strong></li>
+    <li>Repository access: <em>Only select repositories</em> → <code id="repo-name-hint"></code></li>
+    <li>Permissions: <em>Repository permissions → Administration → Read and write</em></li>
+    <li>
+      Generate token, then paste here:
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.25rem">
+        <input id="pat-input" type="text" placeholder="github_pat_..." style="flex:1" />
+        <button id="validate-btn">Validate</button>
+      </div>
+      <span id="validate-status" style="font-size:0.85rem;margin-top:0.25rem;display:block"></span>
+    </li>
+  </ol>
+  <div id="invite-link-section" style="display:none;margin-top:1rem">
+    <button id="copy-btn">Copy join link</button>
+    <span id="link-preview" style="font-size:0.8rem;color:#666;margin-left:0.5rem"></span>
+    <p style="font-size:0.8rem;color:#c00;margin-top:0.5rem">
+      ⚠ Set this token to expire in 7 days — revoke it from GitHub Settings when the event is over.
+    </p>
+  </div>
+</div>
 
     <hr>
 
@@ -108,21 +120,67 @@ export async function renderOrganizerDashboard(store, repoParam) {
     </div>
   `
 
-  const patInput = document.getElementById('pat-input')
-  const copyBtn  = document.getElementById('copy-btn')
-  const preview  = document.getElementById('link-preview')
+  const repoName         = store._repoFullName?.split('/')[1] ?? ''
+  const suggestedName    = `${repoName}-invite`
+  const joinBase         = `${location.origin}${location.pathname}?mode=participant&repo=${store._repoFullName}`
+  const patInput         = document.getElementById('pat-input')
+  const validateBtn      = document.getElementById('validate-btn')
+  const validateStatus   = document.getElementById('validate-status')
+  const inviteSection    = document.getElementById('invite-link-section')
+  const copyBtn          = document.getElementById('copy-btn')
+  const preview          = document.getElementById('link-preview')
 
-  patInput.addEventListener('input', () => {
-    const val = patInput.value.trim()
-    copyBtn.disabled = !val
-    const full = `${joinBase}&invite=${val}`
-    preview.textContent = val ? (full.length > 70 ? full.slice(0, 70) + '…' : full) : ''
-  })
+  document.getElementById('pat-name-hint').textContent = suggestedName
+  document.getElementById('repo-name-hint').textContent = store._repoFullName ?? ''
+  document.getElementById('copy-name-btn').onclick = () => {
+    navigator.clipboard.writeText(suggestedName)
+    document.getElementById('copy-name-btn').textContent = 'Copied!'
+    setTimeout(() => { document.getElementById('copy-name-btn').textContent = 'Copy' }, 2000)
+  }
 
-  copyBtn.onclick = () => {
-    navigator.clipboard.writeText(`${joinBase}&invite=${patInput.value.trim()}`)
-    copyBtn.textContent = 'Copied!'
-    setTimeout(() => { copyBtn.textContent = 'Copy join link' }, 2000)
+  validateBtn.onclick = async () => {
+    const token = patInput.value.trim()
+    if (!token) { validateStatus.textContent = 'Paste a token first.'; return }
+    validateBtn.disabled = true
+    validateStatus.textContent = 'Validating...'
+    validateStatus.className = ''
+    try {
+      const resp = await fetch(`https://api.github.com/repos/${store._repoFullName}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
+      })
+      if (resp.status === 401) {
+        validateStatus.textContent = 'Token is invalid or expired — re-generate it at step 1.'
+        validateStatus.className = 'err'
+        inviteSection.style.display = 'none'
+      } else if (!resp.ok) {
+        validateStatus.textContent = 'Token cannot access this repo — check steps 4 and 5.'
+        validateStatus.className = 'err'
+        inviteSection.style.display = 'none'
+      } else {
+        const data = await resp.json()
+        if (!data.permissions?.admin) {
+          validateStatus.textContent = 'Token cannot access this repo — check steps 4 and 5.'
+          validateStatus.className = 'err'
+          inviteSection.style.display = 'none'
+        } else {
+          validateStatus.textContent = 'Token valid ✓'
+          validateStatus.className = 'ok'
+          inviteSection.style.display = 'block'
+          const full = `${joinBase}&invite=${token}`
+          preview.textContent = full.length > 70 ? full.slice(0, 70) + '…' : full
+          copyBtn.onclick = () => {
+            navigator.clipboard.writeText(full)
+            copyBtn.textContent = 'Copied!'
+            setTimeout(() => { copyBtn.textContent = 'Copy join link' }, 2000)
+          }
+        }
+      }
+    } catch(e) {
+      validateStatus.textContent = `Validation error: ${esc(e.message)}`
+      validateStatus.className = 'err'
+    } finally {
+      validateBtn.disabled = false
+    }
   }
 
   async function refreshTable() {
