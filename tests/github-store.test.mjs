@@ -344,3 +344,26 @@ test('saveRecentRepo moves existing entry to front on re-save', () => {
   expect(stored[1]).toBe('owner/repo-b')
   expect(stored.length).toBe(2)
 })
+
+test('_apiCall omits Authorization header when token is null', async () => {
+  let capturedHeaders = null
+  mockFetch((url, opts) => {
+    capturedHeaders = opts.headers
+    return { status: 200, body: {} }
+  })
+  const store = new GitHubStore({})
+  await store._apiCall('GET', '/repos/test/test/contents/')
+  expect(capturedHeaders?.Authorization).toBeFalsy()
+})
+
+test('_apiCall throws immediately on write when store is read-only', async () => {
+  const store = new GitHubStore({ token: 'tok' })
+  store._readOnly = true
+  await expect(store._apiCall('PUT', '/repos/x/y/contents/foo', { content: 'x' })).rejects.toThrow()
+})
+
+test('join throws immediately when store is read-only', async () => {
+  const store = new GitHubStore({ token: 'tok', _username: 'alice' })
+  store._readOnly = true
+  await expect(store.join('owner/repo', 'invite-pat')).rejects.toThrow()
+})
