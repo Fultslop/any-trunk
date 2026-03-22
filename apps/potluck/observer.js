@@ -1,5 +1,5 @@
 import { GitHubStore } from '../../lib/github-store.js'
-import { esc, setStatus } from './helpers.js'
+import { esc } from './helpers.js'
 
 export async function renderObserver(repoParam) {
   const app = document.getElementById('app')
