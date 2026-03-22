@@ -503,3 +503,22 @@ test('initReadOnly throws a friendly error for private or missing repos', async 
     GitHubStore.initReadOnly({ repoFullName: 'owner/private-repo' })
   ).rejects.toThrow('Repo not found or is private')
 })
+
+test('hasToken returns true when token is in sessionStorage', () => {
+  sessionStorage.setItem('gh:token', 'gho_sometoken')
+  expect(GitHubStore.hasToken()).toBe(true)
+})
+
+test('hasToken returns false when no token in sessionStorage', () => {
+  expect(GitHubStore.hasToken()).toBe(false)
+})
+
+test('onboardingUrl returns the GitHub signup URL', () => {
+  expect(GitHubStore.onboardingUrl()).toBe('https://github.com/signup')
+})
+
+test('onboardingHint returns a non-empty string mentioning Google sign-in', () => {
+  const hint = GitHubStore.onboardingHint()
+  expect(hint && hint.length > 0).toBe(true)
+  expect(hint.toLowerCase().includes('google')).toBe(true)
+})
