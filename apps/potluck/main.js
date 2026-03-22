@@ -7,8 +7,9 @@ import { renderObserver } from './observer.js'
 // Register a GitHub OAuth App at github.com/settings/developers
 // Callback URL must match the URL where this file is served.
 // Note these are just placeholders, this client does not exist
-const CLIENT_ID     = 'Ov23lihjQ0R8Ms2wJBWM'
-const CLIENT_SECRET = 'e01faf5fc2d09c675090f8109cccf5e0edf6664b'  // ⚠ exposed in client — see D1 in design spec
+const CLIENT_ID     = '<CLIENT_ID>'
+// ⚠ exposed in client — see D1 in design spec
+const CLIENT_SECRET = '<CLIENT_SECRET>'  
 // Local dev: run `npm run proxy` then set to 'http://localhost:8080'
 // Production: deploy a Cloudflare Worker (see D2 in design spec)
 const CORS_PROXY    = 'http://localhost:8080'
