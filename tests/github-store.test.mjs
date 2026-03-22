@@ -482,3 +482,24 @@ test('deleteSpace throws a generic error for non-403 failures', async () => {
   const store = new GitHubStore({ token: 'tok', repoFullName: 'alice/my-event' })
   await expect(store.deleteSpace()).rejects.toThrow('500')
 })
+
+test('initReadOnly returns a read-only store instance for a public repo', async () => {
+  mockFetch(() => ({ status: 200, body: [] }))
+  const store = await GitHubStore.initReadOnly({ repoFullName: 'owner/public-repo' })
+  expect(store).toBeTruthy()
+  expect(store._token).toBeFalsy()
+  expect(store._readOnly).toBe(true)
+})
+
+test('initReadOnly — write operations throw with read-only message', async () => {
+  mockFetch(() => ({ status: 200, body: [] }))
+  const store = await GitHubStore.initReadOnly({ repoFullName: 'owner/public-repo' })
+  await expect(store.write('x.json', {})).rejects.toThrow(/read-only/)
+})
+
+test('initReadOnly throws a friendly error for private or missing repos', async () => {
+  mockFetch(() => ({ status: 404, body: { message: 'Not Found' } }))
+  await expect(
+    GitHubStore.initReadOnly({ repoFullName: 'owner/private-repo' })
+  ).rejects.toThrow('Repo not found or is private')
+})
