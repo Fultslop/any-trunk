@@ -476,3 +476,9 @@ test('deleteSpace throws on read-only store without making a network call', asyn
   try { await store.deleteSpace() } catch(e) { msg = e.message }
   expect(msg.includes('read-only')).toBe(true)
 })
+
+test('deleteSpace throws a generic error for non-403 failures', async () => {
+  mockFetch(() => ({ status: 500, body: { message: 'Internal Server Error' } }))
+  const store = new GitHubStore({ token: 'tok', repoFullName: 'alice/my-event' })
+  await expect(store.deleteSpace()).rejects.toThrow('500')
+})
