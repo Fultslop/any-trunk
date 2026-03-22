@@ -1,0 +1,12 @@
+{
+  "name": "potluck-poc",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/github-store.test.mjs",
+    "proxy": "node proxy.mjs"
+  },
+  "dependencies": {
+    "cors-anywhere": "^0.4.4"
+  }
+}
