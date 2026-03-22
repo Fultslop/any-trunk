@@ -1,4 +1,3 @@
-import { GitHubStore } from '../../lib/github-store.js'
 import { esc, setStatus } from './helpers.js'
 
 export async function renderParticipant(store, repoParam, inviteParam) {
