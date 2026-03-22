@@ -87,6 +87,25 @@ export async function renderOrganizerDashboard(store, repoParam) {
       <div id="responses-table">Loading...</div>
     </div>
     <div id="status"></div>
+    <hr>
+    <div class="section">
+      <strong>Event lifecycle</strong>
+      <div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+        <button id="close-btn">Close submissions</button>
+        <button id="lock-btn" style="display:none">Lock event</button>
+        <button id="delete-btn" style="display:none">Delete event</button>
+      </div>
+      <div id="delete-confirm" style="display:none;margin-top:0.75rem">
+        <label style="font-size:0.9rem">
+          Type <strong id="delete-repo-hint"></strong> to confirm permanent deletion:
+          <input id="delete-name-input" type="text" style="width:100%;margin-top:0.25rem" />
+        </label>
+        <button id="delete-confirm-btn" style="margin-top:0.5rem;background:#c00;color:#fff;border:none;padding:0.4rem 1rem;border-radius:4px;cursor:pointer" disabled>
+          Permanently delete
+        </button>
+        <button id="delete-cancel-btn" style="margin-top:0.5rem;margin-left:0.5rem">Cancel</button>
+      </div>
+    </div>
   `
 
   const patInput = document.getElementById('pat-input')
@@ -142,4 +161,78 @@ export async function renderOrganizerDashboard(store, repoParam) {
 
   await refreshTable()
   setInterval(refreshTable, 30_000)
+
+  const closeBtn         = document.getElementById('close-btn')
+  const lockBtn          = document.getElementById('lock-btn')
+  const deleteBtn        = document.getElementById('delete-btn')
+  const deleteConfirm    = document.getElementById('delete-confirm')
+  const deleteRepoHint   = document.getElementById('delete-repo-hint')
+  const deleteNameInput  = document.getElementById('delete-name-input')
+  const deleteConfirmBtn = document.getElementById('delete-confirm-btn')
+  const deleteCancelBtn  = document.getElementById('delete-cancel-btn')
+  const repoShortName    = store._repoFullName?.split('/')[1] ?? store._repoFullName
+
+  closeBtn.onclick = async () => {
+    closeBtn.disabled = true
+    setStatus('Closing submissions...', false)
+    try {
+      await store.closeSubmissions()
+      closeBtn.textContent = 'Submissions closed ✓'
+      setStatus('', false)
+      lockBtn.style.display = 'inline'
+    } catch(e) {
+      setStatus(e.message)
+      closeBtn.disabled = false
+    }
+  }
+
+  lockBtn.onclick = async () => {
+    if (!confirm('This will archive the event on GitHub, making it permanently read-only. You will not be able to reopen submissions. Continue?')) return
+    lockBtn.disabled = true
+    setStatus('Locking event...', false)
+    try {
+      await store.archiveSpace()
+      lockBtn.textContent = 'Event locked ✓'
+      setStatus('', false)
+      deleteBtn.style.display = 'inline'
+    } catch(e) {
+      setStatus(e.message)
+      lockBtn.disabled = false
+    }
+  }
+
+  deleteBtn.onclick = () => {
+    deleteRepoHint.textContent = repoShortName
+    deleteConfirm.style.display = 'block'
+    deleteBtn.style.display = 'none'
+  }
+
+  deleteCancelBtn.onclick = () => {
+    deleteConfirm.style.display = 'none'
+    deleteBtn.style.display = 'inline'
+    deleteNameInput.value = ''
+    deleteConfirmBtn.disabled = true
+  }
+
+  deleteNameInput.addEventListener('input', () => {
+    deleteConfirmBtn.disabled = deleteNameInput.value.trim() !== repoShortName
+  })
+
+  deleteConfirmBtn.onclick = async () => {
+    deleteConfirmBtn.disabled = true
+    setStatus('Deleting event...', false)
+    try {
+      await store.deleteSpace()
+      const key = 'potluck:recentRepos'
+      const repos = JSON.parse(localStorage.getItem(key) ?? '[]')
+      localStorage.setItem(key, JSON.stringify(repos.filter(r => r !== store._repoFullName)))
+      location.href = `${location.pathname}?mode=organizer`
+    } catch(e) {
+      setStatus(e.message)
+      deleteNameInput.value = ''
+      deleteConfirmBtn.disabled = true
+      deleteConfirm.style.display = 'none'
+      deleteBtn.style.display = 'inline'
+    }
+  }
 }
