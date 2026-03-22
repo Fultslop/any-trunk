@@ -15,8 +15,8 @@ beforeEach(() => {
 // Placeholder to verify the harness works
 test('GitHubStore can be instantiated', () => {
   const s = new GitHubStore({ clientId: 'id', clientSecret: 'secret' })
-  expect(!s.isAuthenticated).toBe(true)
-  expect(s.username === null).toBe(true)
+  expect(s.isAuthenticated).toBeFalsy()
+  expect(s.username).toBeNull()
 })
 
 // Track redirects: override global.location with a settable property descriptor
@@ -37,7 +37,6 @@ test('beginAuth stores credentials and state in sessionStorage', () => {
 })
 
 test('beginAuth redirects to GitHub OAuth URL', () => {
-  lastRedirect = null
   GitHubStore.beginAuth('my-client-id', 'my-secret')
   expect(lastRedirect?.includes('github.com/login/oauth/authorize')).toBe(true)
   expect(lastRedirect?.includes('client_id=my-client-id')).toBe(true)
@@ -115,13 +114,13 @@ test('createSpace creates a private repo and writes _event.json', async () => {
 
   expect(repoFullName).toBe('johndoe/potluck-test')
   const repoCall = calls.find(c => c.url.includes('/user/repos'))
-  expect(repoCall?.body?.private === true).toBe(true)
+  expect(repoCall?.body?.private).toBe(true)
   const eventCall = calls.find(c => c.url.includes('_event.json'))
-  expect(!!eventCall).toBe(true)
+  expect(eventCall).toBeTruthy()
   const content = JSON.parse(decodeURIComponent(escape(atob(eventCall.body.content))))
   expect(content.name).toBe('potluck-test')
   expect(content.owner).toBe('johndoe')
-  expect(!!content.created).toBe(true)
+  expect(content.created).toBeTruthy()
 })
 
 test('_apiCall sends Authorization header with token', async () => {
@@ -132,7 +131,7 @@ test('_apiCall sends Authorization header with token', async () => {
   })
   const store = new GitHubStore({ token: 'gho_mytoken' })
   await store._apiCall('GET', '/user')
-  expect(capturedHeaders?.Authorization === 'Bearer gho_mytoken').toBe(true)
+  expect(capturedHeaders?.Authorization).toBe('Bearer gho_mytoken')
 })
 
 test('join adds collaborator using inviteToken and auto-accepts invitation', async () => {
@@ -155,12 +154,12 @@ test('join adds collaborator using inviteToken and auto-accepts invitation', asy
   await store.join('johndoe/potluck', 'invite-pat')
 
   const addCall = calls.find(c => c.url.includes('/collaborators/bob'))
-  expect(!!addCall).toBe(true)
-  expect(addCall.headers.Authorization === 'Bearer invite-pat').toBe(true)
+  expect(addCall).toBeTruthy()
+  expect(addCall.headers.Authorization).toBe('Bearer invite-pat')
 
   const acceptCall = calls.find(c => c.url.includes('invitations/99') && c.method === 'PATCH')
-  expect(!!acceptCall).toBe(true)
-  expect(acceptCall.headers.Authorization === 'Bearer participant-token').toBe(true)
+  expect(acceptCall).toBeTruthy()
+  expect(acceptCall.headers.Authorization).toBe('Bearer participant-token')
 })
 
 test('join is idempotent — skips accept step when already a collaborator', async () => {
@@ -176,7 +175,7 @@ test('join is idempotent — skips accept step when already a collaborator', asy
   await store.join('johndoe/potluck', 'invite-pat')
 
   const inviteCalls = calls.filter(c => c.url.includes('repository_invitations'))
-  expect(inviteCalls.length === 0).toBe(true)
+  expect(inviteCalls.length).toBe(0)
 })
 
 test('write creates a new file when it does not exist', async () => {
@@ -191,9 +190,9 @@ test('write creates a new file when it does not exist', async () => {
   await store.write('bob/dish.json', { dish: 'lasagna' })
 
   const putCall = calls.find(c => c.method === 'PUT')
-  expect(!!putCall).toBe(true)
+  expect(putCall).toBeTruthy()
   const body = JSON.parse(putCall.body)
-  expect(!body.sha).toBe(true)
+  expect(body.sha).toBeFalsy()
   const decoded = JSON.parse(decodeURIComponent(escape(atob(body.content))))
   expect(decoded.dish).toBe('lasagna')
 })
@@ -228,14 +227,14 @@ test('append writes to a timestamped path under prefix', async () => {
   await store.append({ dish: 'tiramisu' }, { prefix: 'bob' })
 
   const putCall = calls.find(c => c.method === 'PUT')
-  expect(!!putCall).toBe(true)
+  expect(putCall).toBeTruthy()
   expect(putCall.url.includes('/bob/')).toBe(true)
   expect(putCall.url.endsWith('.json')).toBe(true)
   // Extract timestamp from URL path: .../contents/bob/2026-03-21T...Z.json
   const match = putCall.url.match(/\/bob\/(.+\.json)/)
-  expect(!!match).toBe(true)
+  expect(match).toBeTruthy()
   const rawName = decodeURIComponent(match[1].replace('.json', ''))
-  expect(!!rawName.match(/^\d{4}-/)).toBe(true)
+  expect(rawName.match(/^\d{4}-/)).toBeTruthy()
 })
 
 test('read returns parsed JSON for an existing file', async () => {
@@ -252,7 +251,7 @@ test('read returns null for a missing file', async () => {
   mockFetch(() => ({ status: 404, body: { message: 'Not Found' } }))
   const store = new GitHubStore({ token: 'tok', repoFullName: 'johndoe/potluck' })
   const result = await store.read('bob/dish.json')
-  expect(result === null).toBe(true)
+  expect(result).toBeNull()
 })
 
 test('list returns sorted array of { path, sha } for files only', async () => {
@@ -310,18 +309,18 @@ test('readAll returns participants with entries and latest, skipping _ entries',
   expect(result.length).toBe(2)
 
   const bob = result.find(r => r.username === 'bob')
-  expect(!!bob).toBe(true)
+  expect(bob).toBeTruthy()
   expect(bob.entries.length).toBe(2)
   expect(bob.latest.dish).toBe('tiramisu')
 
   const tom = result.find(r => r.username === 'tom')
-  expect(!!tom).toBe(true)
+  expect(tom).toBeTruthy()
   expect(tom.entries.length).toBe(0)
-  expect(tom.latest === null).toBe(true)
+  expect(tom.latest).toBeNull()
 
   // _event.json must be excluded
-  expect(!result.find(r => r.username === '_event.json')).toBe(true)
-  expect(!result.find(r => r.username === '_archive')).toBe(true)
+  expect(result.find(r => r.username === '_event.json')).toBeFalsy()
+  expect(result.find(r => r.username === '_archive')).toBeFalsy()
 })
 
 test('saveRecentRepo stores repoFullName in localStorage', () => {
