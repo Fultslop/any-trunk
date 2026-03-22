@@ -164,19 +164,35 @@ class WorkerGitHubStore extends GitHubStore {
   //   so the join URL survives page refresh; if localStorage is cleared, calling
   //   register() again is safe — Worker returns the same code, join URLs stay valid
 
+  // Override — uses gifts:recentRepos localStorage key (not potluck:recentRepos)
+  // to keep recent-registry state isolated from the potluck app
+  saveRecentRepo(repoFullName)
+
   // Override — same positional signature as base class; inviteCode replaces raw PAT
   async join(repoFullName, inviteCode)
   //   POSTs { repo, username, inviteCode } to {workerUrl}/spaces/invite
   //   Worker validates code and calls PUT /collaborators/{username} using stored organizer token
   //   Worker always returns 200 on success (GitHub 204 for both new invite and already-collaborator)
-  //   then calls this._autoAcceptInvitation(repoFullName) for the accept step
+  //   always calls this._autoAcceptInvitation(repoFullName) — Worker gives no signal
+  //   to skip it; _autoAcceptInvitation() must be fault-tolerant (see refactor note)
 }
 
-// Required base class refactor:
-// The base class GitHubStore.join() must extract its auto-accept logic into a
-// protected method _autoAcceptInvitation(repoFullName) so WorkerGitHubStore.join()
-// can call it without duplicating code. This is the only change required to the base
-// class — all existing behaviour and tests remain unchanged.
+// Required base class refactor — two changes to GitHubStore, both backward-compatible:
+//
+// 1. Extract auto-accept logic into _autoAcceptInvitation(repoFullName):
+//    GitHubStore.join() calls _autoAcceptInvitation() only when the PUT response
+//    body is non-empty (invitation was just created). WorkerGitHubStore.join()
+//    always calls it (Worker returns no signal on already-a-collaborator).
+//
+// 2. Make _autoAcceptInvitation() fault-tolerant:
+//    Currently throws 'Invitation not found after collaborator add' if no pending
+//    invitation exists. Must be changed to return silently in that case, because
+//    WorkerGitHubStore.join() calls it unconditionally and already-a-collaborator
+//    participants have no pending invitation to accept.
+//
+// Existing potluck behaviour is unchanged: GitHubStore.join() still conditionally
+// calls _autoAcceptInvitation() based on the PUT response body, so the fault-tolerant
+// path is never reached in the potluck flow. All existing tests remain valid.
 ```
 
 ---
@@ -244,9 +260,9 @@ The gifts app is strictly better UX for organizers — fewer steps, no GitHub Se
   _event.json        # { name, created, owner } — same as potluck
   _wishlist.json     # { items: ["Coffee maker", "Blender", ...] } — organizer-authored
   alice/
-    2026-03-22T10:00:00.000Z.json   # { item: "Coffee maker" }
+    2026-03-22T10-00-00.000Z.json   # { item: "Coffee maker" }
   bob/
-    2026-03-22T10:05:00.000Z.json   # { item: "Blender" }
+    2026-03-22T10-05-00.000Z.json   # { item: "Blender" }
 ```
 
 **Claim resolution:** first claim per item wins — determined by lexicographic timestamp sort across all participant entries. No locking, no transactions. If two people claim the same item simultaneously, both writes succeed; the app shows both claimants for that item with a "conflict" label and the organizer resolves it out of band. Same eventual-consistency-via-append-only-log model as potluck.
@@ -286,8 +302,10 @@ Written by participants via `store.append({ item }, { prefix: username })`.
 2. `store.join(repo, inviteCode)` fires automatically:
    - POSTs to Worker `/spaces/invite` with repo + username + inviteCode
    - Worker validates code and calls `PUT /collaborators/{username}` using stored organizer token
-   - If already a collaborator, Worker returns 200 and skips the invite
-   - Participant's own token then auto-accepts the invitation (same as potluck base logic)
+   - Worker always returns 200 (whether new invite or already a collaborator)
+   - Participant's own token calls `_autoAcceptInvitation()` unconditionally;
+     the method returns silently if no pending invitation exists (unlike potluck,
+     where the PUT response body signals whether to attempt accept at all)
 3. `store.read('_wishlist.json')` → show wishlist with claimed/unclaimed status
 4. Click to claim → `store.append({ item }, { prefix: username })`
 5. Claimed items show claimant's username; own claim shown as "You"
