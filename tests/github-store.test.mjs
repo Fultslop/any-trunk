@@ -367,3 +367,28 @@ test('join throws immediately when store is read-only', async () => {
   store._readOnly = true
   await expect(store.join('owner/repo', 'invite-pat')).rejects.toThrow()
 })
+
+test('createSpace passes private:false when requested', async () => {
+  const calls = []
+  mockFetch((url, opts) => {
+    calls.push({ url, body: opts.body ? JSON.parse(opts.body) : null })
+    if (url.includes('/user/repos')) {
+      return { status: 201, body: { full_name: 'johndoe/public-event', owner: { login: 'johndoe' } } }
+    }
+    return { status: 201, body: {} }
+  })
+  const store = new GitHubStore({ token: 'tok', _username: 'johndoe' })
+  await store.createSpace('public-event', { private: false })
+  const repoCall = calls.find(c => c.url.includes('/user/repos'))
+  expect(repoCall?.body?.private).toBe(false)
+})
+
+test('createSpace throws a friendly error when repo name is already taken', async () => {
+  mockFetch(() => ({ status: 422, body: { message: 'Repository creation failed.' } }))
+  const store = new GitHubStore({ token: 'tok', _username: 'johndoe' })
+  let msg = ''
+  try { await store.createSpace('existing-event') } catch(e) { msg = e.message }
+  expect(msg.includes('existing-event')).toBe(true)
+  expect(msg.includes('already exists')).toBe(true)
+  expect(msg.includes('existing-event-2')).toBe(true)
+})
