@@ -392,3 +392,35 @@ test('createSpace throws a friendly error when repo name is already taken', asyn
   expect(msg.includes('already exists')).toBe(true)
   expect(msg.includes('existing-event-2')).toBe(true)
 })
+
+test('closeSubmissions merges closed:true into _event.json', async () => {
+  const existing = { name: 'my-event', created: '2026-03-22T00:00:00.000Z', owner: 'alice' }
+  const existingEncoded = btoa(unescape(encodeURIComponent(JSON.stringify(existing))))
+  const calls = []
+  mockFetch((url, opts) => {
+    calls.push({ method: opts.method ?? 'GET', url, body: opts.body })
+    if ((opts.method ?? 'GET') === 'GET') {
+      return { status: 200, body: { content: existingEncoded, sha: 'sha-event' } }
+    }
+    return { status: 200, body: {} }
+  })
+  const store = new GitHubStore({ token: 'tok', repoFullName: 'alice/my-event' })
+  await store.closeSubmissions()
+  const putCall = calls.find(c => c.method === 'PUT' && c.url.includes('_event.json'))
+  expect(putCall).toBeTruthy()
+  const body = JSON.parse(putCall.body)
+  const written = JSON.parse(decodeURIComponent(escape(atob(body.content))))
+  expect(written.closed).toBe(true)
+  expect(written.name).toBe('my-event')
+})
+
+test('closeSubmissions is idempotent — succeeds even if already closed', async () => {
+  const existing = { name: 'e', created: '2026-03-22T00:00:00.000Z', owner: 'a', closed: true }
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(existing))))
+  mockFetch((url, opts) => {
+    if ((opts.method ?? 'GET') === 'GET') return { status: 200, body: { content: encoded, sha: 'sha' } }
+    return { status: 200, body: {} }
+  })
+  const store = new GitHubStore({ token: 'tok', repoFullName: 'a/e' })
+  await expect(store.closeSubmissions()).resolves.not.toThrow()
+})
