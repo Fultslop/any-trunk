@@ -21,8 +21,8 @@ export async function renderOrganizer(store, repoParam) {
     store._repoFullName = activeRepo
   }
 
-  async function renderDashboard() {
-    const wishlist = activeRepo ? await store.read('_wishlist.json') : null
+  async function renderDashboard(wishlistOverride = null) {
+    const wishlist = wishlistOverride ?? (activeRepo ? await store.read('_wishlist.json') : null)
     const participants = activeRepo ? await store.readAll() : []
 
     // Build claims map: item → [usernames]
@@ -123,7 +123,7 @@ export async function renderOrganizer(store, repoParam) {
       const current = await store.read('_wishlist.json')
       const updated = { items: [...(current?.items ?? []), item] }
       await store.write('_wishlist.json', updated)
-      await renderDashboard()
+      await renderDashboard(updated)
     })
 
     document.querySelectorAll('.resume-btn').forEach(btn => {

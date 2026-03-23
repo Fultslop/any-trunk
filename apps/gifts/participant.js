@@ -39,7 +39,7 @@ export async function renderParticipant(store, repoParam, inviteCode) {
     return
   }
 
-  async function renderWishlist() {
+  async function renderWishlist(optimisticClaim = null) {
     const wishlist = await store.read('_wishlist.json')
     const participants = await store.readAll()
 
@@ -56,6 +56,11 @@ export async function renderParticipant(store, repoParam, inviteCode) {
           if (!firstClaims[data.item]) firstClaims[data.item] = username
         }
       }
+    }
+
+    // Apply optimistic claim so the UI updates immediately without waiting for GitHub
+    if (optimisticClaim && !allClaims[optimisticClaim]) {
+      allClaims[optimisticClaim] = [store.username]
     }
 
     const items = wishlist?.items ?? []
@@ -91,10 +96,12 @@ export async function renderParticipant(store, repoParam, inviteCode) {
 
     document.querySelectorAll('.claim-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
+        const item = btn.dataset.item
+        btn.textContent = 'Claiming…'
         btn.disabled = true
         try {
-          await store.append({ item: btn.dataset.item }, { prefix: store.username })
-          await renderWishlist()
+          await store.append({ item }, { prefix: store.username })
+          await renderWishlist(item)
         } catch (e) {
           app.insertAdjacentHTML('beforeend', `<p class="err">${esc(e.message)}</p>`)
           btn.disabled = false

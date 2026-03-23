@@ -17,12 +17,20 @@ Estimated time: 45–60 minutes (including Worker deployment).
 You will need a free [Cloudflare account](https://dash.cloudflare.com/sign-up).
 
 **Install wrangler:**
+
+Wrangler is the command-line interface (CLI) tool used to build, test, and deploy projects on Cloudflare Workers.
+
 ```bash
 npm install -g wrangler
 wrangler login
 ```
 
 **Create a KV namespace:**
+
+Next we'll use a command used to set up a Key-Value (KV) storage bucket on Cloudflare’s global network.
+
+When you run npx wrangler kv namespace create anytrunk, you are telling the Wrangler CLI to create a new partition of storage (called a Namespace) named anytrunk.
+
 ```bash
 cd workers/anytrunk-worker
 npx wrangler kv namespace create anytrunk
@@ -35,6 +43,12 @@ binding = "KV"
 id = "PASTE_YOUR_ID_HERE"
 ```
 
+**Register a GitHub OAuth App** following [Step 1 in `docs/tutorial.md`](./tutorial.md#step-1-register-a-github-oauth-app), using these gifts-specific values:
+- **Authorization callback URL:** `http://localhost:3000/apps/gifts/index.html`
+- All other fields (name, homepage URL) are the same as described there.
+
+Note the **Client ID** and **Client Secret** — you'll use them in the next step.
+
 **Set secrets** (these replace `CLIENT_SECRET` and `CORS_PROXY` from potluck — they live
 in the Worker, never in client code):
 ```bash
@@ -42,14 +56,16 @@ npx wrangler secret put GITHUB_CLIENT_ID
 npx wrangler secret put GITHUB_CLIENT_SECRET
 ```
 
-Enter the values from your OAuth App when prompted.
+When prompted, enter the **Client ID** and **Client Secret** from the OAuth App you just registered.
 
 **Deploy:**
+This will take your local code, assets, and configuration, packages them together, and upload them to the Cloudflare Global Network.
+
 ```bash
 npx wrangler deploy
 ```
 
-Note the Worker URL (e.g. `https://anytrunk-worker.your-subdomain.workers.dev`).
+Note the Worker URL (e.g. `https://anytrunk-worker.your-subdomain.workers.dev`). It is printed in the deploy output, and also visible in the Cloudflare dashboard under **Compute → Workers & Pages → anytrunk-worker → Settings → Domains & Routes**.
 
 Return to the project root before continuing:
 ```bash
@@ -71,11 +87,16 @@ const CLIENT_ID  = '<your Client ID>'      // same OAuth App as registered in pr
 const WORKER_URL = '<your Worker URL>'     // e.g. https://anytrunk-worker.your-sub.workers.dev
 ```
 
-No `CLIENT_SECRET` here — it lives in the Worker.
+Note that we do not add a `CLIENT_SECRET` here — it lives in the Cloudflare Worker.
 
 ---
 
 ## Step 3: Organizer Creates a Registry (Account A)
+
+Start the static file server (from the project root) if it isn't already running:
+```bash
+npx serve . -l 3000
+```
 
 Navigate to:
 ```
@@ -91,6 +112,8 @@ http://localhost:3000/apps/gifts/index.html?mode=organizer
 2. Fill in a registry name (e.g. `birthday-2026-04-01`) and click **Create**.
    Same as potluck: `store.createSpace(name)` creates a private GitHub repo.
 
+   > GitHub repo names may only contain letters, numbers, hyphens (`-`), underscores (`_`), and periods (`.`) — no spaces. If you use an invalid name, the app will show an error and no repo will be created.
+
 3. The app immediately calls `store.register()` after creation.
 
    > `register()` POSTs `{ repo, token }` to the Worker's `/spaces/register` endpoint.
@@ -98,6 +121,8 @@ http://localhost:3000/apps/gifts/index.html?mode=organizer
    > The invite code is stored in `localStorage` — no PAT creation needed.
 
    Notice: no GitHub Settings detour. No PAT checklist. This is D3 resolved.
+
+   You can verify if this works by checking your github repo. It should contain a repo with the same name as you just used to create `birthday-2026-04-01`.
 
 4. Add wishlist items using the **Add** button. Each item is written to `_wishlist.json`
    via `store.write('_wishlist.json', { items })`.

@@ -47,7 +47,7 @@ async function handleOAuthToken({ code }, env) {
 
   const resp = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
-    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'anytrunk-worker' },
     body: JSON.stringify({
       client_id:     env.GITHUB_CLIENT_ID,
       client_secret: env.GITHUB_CLIENT_SECRET,
@@ -102,6 +102,7 @@ async function handleInvite({ repo, username, inviteCode }, env) {
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
         'Content-Type': 'application/json',
+        'User-Agent': 'anytrunk-worker',
       },
       body: JSON.stringify({ permission: 'push' }),
     }
