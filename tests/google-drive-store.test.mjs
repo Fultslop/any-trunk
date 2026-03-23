@@ -270,6 +270,58 @@ test('append creates timestamped file in participant subfolder', async () => {
   expect(createdFiles.some(f => f.match(/^\d{4}-\d{2}-\d{2}T.*\.json$/))).toBe(true)
 })
 
+// ── readAll ──────────────────────────────────────────────────────────────────
+
+test('readAll returns participant entries sorted by username', async () => {
+  const store = makeStore()
+  store._folderId = 'folder-root'
+
+  mockFetch((url) => {
+    // List subfolders of root — match by folderId in the query string
+    if (url.includes('folder-root') && url.includes('google-apps.folder'))
+      return { status: 200, body: { files: [
+        { id: 'sf-bob',   name: 'bob@gmail.com' },
+        { id: 'sf-alice', name: 'alice@gmail.com' },
+      ]}}
+    // List files in alice's subfolder
+    if (url.includes('sf-alice'))
+      return { status: 200, body: { files: [{ id: 'f1', name: '2026-03-23T10-00-00.000Z.json' }] } }
+    // List files in bob's subfolder
+    if (url.includes('sf-bob'))
+      return { status: 200, body: { files: [{ id: 'f2', name: '2026-03-23T11-00-00.000Z.json' }] } }
+    // Get file content
+    if (url.includes('f1') && url.includes('alt=media'))
+      return { status: 200, body: { gift: 'book' } }
+    if (url.includes('f2') && url.includes('alt=media'))
+      return { status: 200, body: { gift: 'mug' } }
+    throw new Error(`Unexpected readAll fetch: ${url}`)
+  })
+
+  const result = await store.readAll()
+  expect(result).toHaveLength(2)
+  expect(result[0].username).toBe('alice@gmail.com')   // sorted
+  expect(result[0].latest).toEqual({ gift: 'book' })
+  expect(result[1].username).toBe('bob@gmail.com')
+})
+
+test('readAll skips _ prefixed folders', async () => {
+  const store = makeStore()
+  store._folderId = 'folder-root'
+  mockFetch((url) => {
+    if (url.includes('folder-root') && url.includes('google-apps.folder'))
+      return { status: 200, body: { files: [
+        { id: 'sf-meta', name: '_meta' },
+        { id: 'sf-alice', name: 'alice@gmail.com' },
+      ]}}
+    if (url.includes('sf-alice'))
+      return { status: 200, body: { files: [] } }
+    throw new Error(`Unexpected: ${url}`)
+  })
+  const result = await store.readAll()
+  expect(result).toHaveLength(1)
+  expect(result[0].username).toBe('alice@gmail.com')
+})
+
 // ── write ────────────────────────────────────────────────────────────────────
 
 test('write updates existing file', async () => {
