@@ -44,13 +44,15 @@ This spec adds `BaseStore` to enforce the contract, eliminates post-init static 
 
 | File | Change |
 |---|---|
-| `lib/github-store.js` | Extend `BaseStore`. Rename `_repoFullName` → `_spaceId`. Add `get userId()`. Rename `capabilities()` → `getCapabilities()`. Remove `saveRecentSpace`/`getRecentSpaces` (inherited). Rename `onboardingUrl`/`onboardingHint`. Update `init()` return contract. |
-| `lib/github-store-worker.js` | Rename `getCapabilities()`. Update `init()` return contract. Update `saveRecentSpace` call sites. |
-| `lib/google-drive-store.js` | Extend `BaseStore`. Rename `_folderId` → `_spaceId`. Add `get userId()`. Rename `getCapabilities()`, `getOnboardingUrl()`, `getOnboardingHint()`. Remove `saveRecentSpace`/`getRecentSpaces` (inherited). Remove `hasToken()`. Update `init()` return contract. |
+| `lib/github-store.js` | Extend `BaseStore`. Rename `_repoFullName` → `_spaceId`. Add `get userId()`. Rename `capabilities()` → `getCapabilities()`. Remove `hasToken()`, `saveRecentSpace`, `getRecentSpaces` (last two inherited). Rename `onboardingUrl`/`onboardingHint`. Update `init()` signature and return contract. |
+| `lib/github-store-worker.js` | Rename `getCapabilities()`. Remove `hasToken()`. Update `init()` return contract. Rename `this._repoFullName` → `this._spaceId` in `register()` and `join()`. Update `saveRecentSpace` call to `this.constructor.saveRecentSpace(id)`. |
+| `lib/google-drive-store.js` | Extend `BaseStore`. Rename `_folderId` → `_spaceId` throughout. Add `get userId()`. Rename `getCapabilities()`, `getOnboardingUrl()`, `getOnboardingHint()`. Remove `hasToken()`, `saveRecentSpace`, `getRecentSpaces` (last two inherited). Override `setSpace()` to persist to sessionStorage. Update `init()` signature and return contract. |
 | `lib/capabilities.js` | Update `store.capabilities()` → `store.getCapabilities()` inside `assertCapabilities`. |
 | `apps/potluck/main.js` | Remove `hasToken()` pre-check. Handle `{ status: 'onboarding' }` from `init()`. |
-| `apps/gifts/main.js` | Same as potluck. |
-| `apps/gifts/main-drive.js` | Remove `GoogleDriveStore.getRecentSpaces()` call → `store.getRecentSpaces()`. Replace `store._folderId =` → `store.setSpace()`. Handle `{ status: 'onboarding' }` from `init()`. |
+| `apps/potluck/participant.js` | Update `renderOnboardingGate` signature to accept `{ url, hint }` result object instead of store-specific config. |
+| `apps/gifts/main.js` | Remove `hasToken()` pre-check. Handle `{ status: 'onboarding' }` from `init()`. |
+| `apps/gifts/participant.js` | Update `renderOnboardingGate` signature to accept `{ url, hint }` result object. |
+| `apps/gifts/main-drive.js` | Remove static `getRecentSpaces()` call → `store.getRecentSpaces()`. Replace `store._folderId =` → `store.setSpace()`. Add `{ status: 'onboarding' }` handling for participant mode. |
 
 ### Deleted files
 
@@ -103,11 +105,26 @@ export class BaseStore {
 
 ### Shared implementations
 
-**`setSpace(id)`** — sets `this._spaceId`. Lightweight sync operation; no network call. Distinct from `join()` which verifies access. Used by the organizer flow to switch the active space without re-joining.
+**`setSpace(id)`** — sets `this._spaceId` in memory only. Lightweight sync operation; no network call. Distinct from `join()` which verifies access. Used by the organizer flow to switch the active space without re-joining.
+
+Stores that must also persist the space to sessionStorage (currently `GoogleDriveStore`) override `setSpace()`:
+
+```js
+// GoogleDriveStore override
+setSpace(id) {
+  super.setSpace(id)
+  if (id) sessionStorage.setItem('gd:folderId', id)
+  else    sessionStorage.removeItem('gd:folderId')
+}
+```
+
+`init()` Branch 2 (rehydration) continues to read from sessionStorage directly — `setSpace()` is for runtime changes only.
 
 **`getRecentSpaces()`** — reads from `localStorage` under `${_storageKey}:recentSpaces`. Instance method; uses `this.constructor._storageKey` so it always reads the correct namespace for the concrete class.
 
 **`static saveRecentSpace(id)`** — writes to the same key. Called internally by `createSpace()` and `join()` on each store. Apps do not call this directly.
+
+**Calling convention:** inside instance methods, always call `this.constructor.saveRecentSpace(id)` — never `BaseStore.saveRecentSpace(id)` or a hardcoded subclass name. This ensures the correct `_storageKey` is used regardless of subclassing depth.
 
 ### Storage key safety
 
@@ -121,11 +138,19 @@ Each store declares a unique short prefix:
 
 `closeSubmissions`, `archiveSpace`, and `addCollaborator` are **not** stubbed on `BaseStore`. They are optional capabilities — stores that implement them declare them in `getCapabilities()`. Apps guard calls with `store.getCapabilities()` before invoking.
 
+### `list()` — not part of the base contract
+
+`GitHubStore` exposes a public `list(prefix)` method used internally. `GoogleDriveStore` has no equivalent public method (listing is internal). `list()` is not added to `BaseStore` and is not part of the provider contract. Apps that call `list()` directly are using a `GitHubStore`-specific API and must import `GitHubStore` accordingly.
+
 ---
 
 ## `init()` Return Contract
 
-All stores return one of three values from `init()`:
+All stores follow the same signature and return one of four outcomes from `init()`:
+
+```js
+static async init({ ..., mode = null } = {})
+```
 
 | Situation | Return value |
 |---|---|
@@ -134,24 +159,23 @@ All stores return one of three values from `init()`:
 | Not authenticated + `mode: 'participant'` | `{ status: 'onboarding', url, hint }` |
 | Not authenticated + organizer flow | `null` — redirects directly to OAuth |
 
-The `onboarding` branch triggers only when `init()` receives `{ mode: 'participant' }` in its config. Without it, unauthenticated calls redirect to OAuth immediately (existing behaviour preserved).
+The `onboarding` branch triggers only when `init()` receives `{ mode: 'participant' }`. Without it, unauthenticated calls redirect to OAuth immediately (existing behaviour preserved).
 
 ### App-side pattern
 
 ```js
-// Each main*.js — store class mentioned only on these two lines:
-import { WorkerGitHubStore } from '../../lib/github-store-worker.js'
-
-const result = await WorkerGitHubStore.init({ ...config, mode })
+const result = await StoreClass.init({ ...config, mode })
 if (!result) return                          // null: redirecting to OAuth
 if (result.status === 'onboarding') {
-  renderOnboardingGate(result)               // result.url, result.hint
+  renderOnboardingGate(repoParam, result)    // result.url, result.hint
   return
 }
 const store = result                         // BaseStore instance — no class name needed again
 ```
 
-`renderOnboardingGate` receives the result object directly. It no longer needs `clientId`, `workerUrl`, or any store-specific config — only `url` and `hint`.
+`renderOnboardingGate` receives the result object for `url` and `hint`. The `repoParam` argument is retained where the UI needs to display the space name/ID in the onboarding screen — its presence depends on the app. Store-specific config (`clientId`, `workerUrl`, `clientSecret`, `corsProxy`) is no longer passed.
+
+Since `potluck/main.js` uses `GitHubStore` and `gifts/main.js` uses `WorkerGitHubStore`, the import line and config object differ per app — the pattern above is identical, only those two details change.
 
 ---
 
@@ -178,48 +202,78 @@ All methods that return data use `getX()`:
 - `static _storageKey = 'gh'`
 - `this._repoFullName` renamed to `this._spaceId` throughout
 - `get userId()` returns `this._username`
+- `hasToken()` removed — logic absorbed into `init()`
 - `saveRecentSpace` / `getRecentSpaces` removed (inherited from `BaseStore`)
+- All hardcoded `GitHubStore.saveRecentSpace(...)` calls in `join()` updated to `this.constructor.saveRecentSpace(...)`
 - `onboardingUrl()` → `getOnboardingUrl()`, `onboardingHint()` → `getOnboardingHint()`
 - `capabilities()` → `getCapabilities()`
-- `init()` updated: returns `{ status: 'onboarding', url: GitHubStore.getOnboardingUrl(), hint: GitHubStore.getOnboardingHint() }` when `mode === 'participant'` and no token
+- `init()` updated: accepts `{ mode }`, returns `{ status: 'onboarding', url: GitHubStore.getOnboardingUrl(), hint: GitHubStore.getOnboardingHint() }` when `mode === 'participant'` and no token
 
 ### `WorkerGitHubStore` *(extends `GitHubStore`)*
 
 - `getCapabilities()` rename only
+- `hasToken()` removed
 - `init()` updated for same onboarding return contract
-- Internal `saveRecentSpace` call updated (`WorkerGitHubStore.saveRecentSpace` → inherited via `this.constructor.saveRecentSpace`)
+- `this._repoFullName` renamed to `this._spaceId` in `register()` and `join()`
+- Internal `saveRecentSpace` call updated to `this.constructor.saveRecentSpace(id)`
 
 ### `GoogleDriveStore`
 
 - `extends BaseStore`
 - `static _storageKey = 'gd'`
-- `this._folderId` renamed to `this._spaceId` throughout
+- `this._folderId` renamed to `this._spaceId` throughout (including `_subfolderFor`, `createSpace`, `join`, `readAll`, `addCollaborator`, `archiveSpace`, `deleteSpace`, `read`, `write`)
+- The `sessionStorage` key `'gd:folderId'` is **retained unchanged** to avoid breaking existing sessions. The field name changes; the storage key does not.
+- `setSpace(id)` overridden to also write/remove `'gd:folderId'` in sessionStorage (see base-store section above)
 - `get userId()` returns `this._userEmail`
+- `hasToken()` removed — logic absorbed into `init()`
 - `saveRecentSpace` / `getRecentSpaces` removed (inherited from `BaseStore`)
+- All hardcoded `GoogleDriveStore.saveRecentSpace(...)` calls in `createSpace()` and `join()` updated to `this.constructor.saveRecentSpace(...)`
 - `onboardingUrl()` → `getOnboardingUrl()`, `onboardingHint()` → `getOnboardingHint()`
 - `capabilities()` → `getCapabilities()`
-- `hasToken()` removed — logic absorbed into `init()`
-- `init()` updated for same onboarding return contract
+- `init()` updated: accepts `{ mode }`, returns onboarding sentinel for participant flow
 
 ---
 
 ## App Changes
 
-### `apps/potluck/main.js` and `apps/gifts/main.js`
+### `apps/potluck/main.js`
 
-Remove the `hasToken()` pre-check block:
+Remove the `hasToken()` pre-check block and replace with unified result handling:
 
 ```js
 // BEFORE
-if (!StoreClass.hasToken() && !hasCode) {
-  renderOnboardingGate(repoParam, { clientId, workerUrl })
+if (!GitHubStore.hasToken() && !hasCode) {
+  renderOnboardingGate(repoParam, { clientId, clientSecret, corsProxy })
   return
 }
-const store = await StoreClass.init(config)
+const store = await GitHubStore.init({ clientId, clientSecret, corsProxy, repoFullName: repoParam })
 if (!store) return
 
 // AFTER
-const result = await StoreClass.init({ ...config, mode })
+const result = await GitHubStore.init({ clientId, clientSecret, corsProxy, repoFullName: repoParam, mode })
+if (!result) return
+if (result.status === 'onboarding') {
+  renderOnboardingGate(repoParam, result)
+  return
+}
+const store = result
+```
+
+### `apps/gifts/main.js`
+
+Same pattern, different class and config:
+
+```js
+// BEFORE
+if (!WorkerGitHubStore.hasToken() && !hasCode) {
+  renderOnboardingGate(repoParam, { clientId, workerUrl })
+  return
+}
+const store = await WorkerGitHubStore.init({ clientId, workerUrl, repoFullName: repoParam })
+if (!store) return
+
+// AFTER
+const result = await WorkerGitHubStore.init({ clientId, workerUrl, repoFullName: repoParam, mode })
 if (!result) return
 if (result.status === 'onboarding') {
   renderOnboardingGate(repoParam, result)
@@ -230,10 +284,25 @@ const store = result
 
 ### `apps/gifts/main-drive.js`
 
-Three changes:
+Three changes plus onboarding handling:
 
 ```js
-// BEFORE
+// BEFORE (init)
+const store = await GoogleDriveStore.init({ clientId, clientSecret })
+if (!store) return
+
+// AFTER (init)
+const result = await GoogleDriveStore.init({ clientId, clientSecret, mode })
+if (!result) return
+if (result.status === 'onboarding') {
+  renderOnboardingGate(null, result)
+  return
+}
+const store = result
+```
+
+```js
+// BEFORE (organizer space restore)
 const recentSpaces = GoogleDriveStore.getRecentSpaces()
 let activeSpace    = spaceParam ?? recentSpaces[0] ?? null
 if (activeSpace) store._folderId = activeSpace
@@ -245,6 +314,18 @@ if (activeSpace) store.setSpace(activeSpace)
 ```
 
 After these changes, each `main*.js` references its store class exactly twice: the `import` line and the `init()` call.
+
+### `apps/potluck/participant.js` and `apps/gifts/participant.js`
+
+`renderOnboardingGate` signature updated from store-specific config to the `init()` result object:
+
+```js
+// BEFORE
+function renderOnboardingGate(repoParam, { clientId, workerUrl }) { ... }
+
+// AFTER
+function renderOnboardingGate(repoParam, { url, hint }) { ... }
+```
 
 ---
 
@@ -259,5 +340,6 @@ One change: `store.capabilities()` → `store.getCapabilities()` inside `assertC
 | # | Issue |
 |---|---|
 | L1 | One authenticated user per store class per session. Two instances of the same store class share sessionStorage auth keys (`gh:token`, `gd:token`, etc.). Running two separate GitHub-authenticated users simultaneously in one page is not supported. |
-| L2 | `_storageKey` uniqueness is enforced by convention, not by the framework. Two third-party stores that happen to choose the same prefix would silently share their `recentSpaces` list. |
+| L2 | `_storageKey` uniqueness is enforced by convention, not by the framework. Two stores that choose the same prefix would silently share their `recentSpaces` list. |
 | L3 | `WorkerGitHubStore` is not routable via a provider string. Apps that need the Worker backend import it directly. A provider registry should be designed when a third backend is introduced. |
+| L4 | `binaryData: true` is declared in `getCapabilities()` for both stores but `GoogleDriveStore` currently only handles JSON. The flag signals intent for Spec 2 (scavenger hunt). Apps must not gate binary upload features on this flag until the method surface is defined. |
