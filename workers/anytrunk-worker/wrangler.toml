@@ -1,0 +1,14 @@
+name = "anytrunk-worker"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "KV"
+# Replace with your KV namespace ID after running:
+# npx wrangler kv namespace create anytrunk
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[vars]
+# GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are set as secrets, not vars.
+# Run: npx wrangler secret put GITHUB_CLIENT_ID
+#      npx wrangler secret put GITHUB_CLIENT_SECRET
