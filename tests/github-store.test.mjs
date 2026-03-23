@@ -522,3 +522,15 @@ test('onboardingHint returns a non-empty string mentioning Google sign-in', () =
   expect(hint && hint.length > 0).toBe(true)
   expect(hint.toLowerCase().includes('google')).toBe(true)
 })
+
+test('_autoAcceptInvitation returns silently when no pending invitation exists', async () => {
+  mockFetch((url, opts) => {
+    if (url.includes('repository_invitations') && (opts.method ?? 'GET') === 'GET') {
+      return { status: 200, body: [] }  // no pending invitations
+    }
+  })
+
+  const store = new GitHubStore({ token: 'tok', _username: 'bob' })
+  // Must not throw even though no invitation is found
+  await expect(store._autoAcceptInvitation('johndoe/potluck')).resolves.toBeUndefined()
+})
