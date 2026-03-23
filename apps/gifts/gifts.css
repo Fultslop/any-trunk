@@ -1,0 +1,15 @@
+body { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+h2 { font-size: 1rem; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid #eee; padding-bottom: 0.25rem; }
+input { padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem; }
+button { padding: 0.4rem 0.8rem; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background: #f6f8fa; font-size: 0.9rem; margin-left: 0.5rem; }
+button:hover { background: #e6e9ec; }
+ul { list-style: none; padding: 0; }
+li { padding: 0.4rem 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0; }
+.badge { background: #2ea44f; color: white; padding: 0.1rem 0.5rem; border-radius: 12px; font-size: 0.85rem; }
+.claimed { color: #666; font-size: 0.9rem; }
+.unclaimed { color: #999; font-size: 0.9rem; font-style: italic; }
+.yours { color: #2ea44f; font-weight: bold; font-size: 0.9rem; }
+.conflict { color: #d97706; font-size: 0.9rem; }
+.err { color: #d73a49; background: #ffeef0; padding: 0.5rem; border-radius: 4px; }
+.resume-btn { margin: 0.25rem 0.25rem 0 0; }
