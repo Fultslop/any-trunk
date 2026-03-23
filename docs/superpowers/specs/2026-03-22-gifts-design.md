@@ -403,7 +403,7 @@ The Worker scales without limit (Cloudflare Workers are globally distributed; at
 
 ### D4 partial mitigation only
 
-The opaque invite code still allows anyone who holds the join URL to self-add as a collaborator during the open signup window. Full mitigation requires per-participant invite links with single-use codes — out of scope for this demo.
+The opaque invite code still allows anyone who holds the join URL to self-add as a collaborator during the open signup window. Per-person single-use codes would limit blast radius but don't fully solve this — a forwarded link can still be used by the wrong person. Full mitigation requires an **approval queue**: participants request access via any shared link, the organizer approves each person by name before they are added as a collaborator. This is out of scope for this demo.
 
 ---
 
@@ -425,7 +425,7 @@ Each file uses the same step-by-step format as `e2e-test.md` with lightweight ca
 
 ## Out of Scope
 
-- Per-participant invite links (single-use codes)
+- D4 full mitigation via approval queue (organizer approves each join request)
 - Wishlist item removal or editing by organizer after participants have claimed
 - Organizer lifecycle controls (close/lock/delete) — potluck already demonstrates these
 - Any UI beyond functional / readable
