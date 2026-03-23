@@ -13,7 +13,7 @@ export async function renderOrganizer(store, repoParam) {
   const app = document.getElementById('app')
 
   // Resume from URL param or localStorage
-  const recentRepos = WorkerGitHubStore.getRecentRepos()
+  const recentRepos = WorkerGitHubStore.getRecentSpaces()
   let activeRepo = repoParam ?? null
 
   if (!activeRepo && recentRepos.length > 0) {

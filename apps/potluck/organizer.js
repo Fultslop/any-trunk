@@ -9,7 +9,7 @@ export async function renderOrganizer(store, repoParam) {
     return
   }
 
-  const recent = GitHubStore.getRecentRepos()
+  const recent = GitHubStore.getRecentSpaces()
   app.innerHTML = `
     <h1>Potluck Organizer</h1>
     <p class="sub">Signed in as <strong>${esc(store.username)}</strong></p>
@@ -281,7 +281,7 @@ export async function renderOrganizerDashboard(store, repoParam) {
     setStatus('Deleting event...', false)
     try {
       await store.deleteSpace()
-      const key = 'potluck:recentRepos'
+      const key = 'gh:recentSpaces'
       const repos = JSON.parse(localStorage.getItem(key) ?? '[]')
       localStorage.setItem(key, JSON.stringify(repos.filter(r => r !== store._repoFullName)))
       location.href = `${location.pathname}?mode=organizer`
