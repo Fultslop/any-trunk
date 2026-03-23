@@ -29,7 +29,7 @@ Object.defineProperty(global, 'location', {
 })
 
 test('beginAuth stores credentials and state in sessionStorage', () => {
-  GitHubStore.beginAuth('my-client-id', 'my-secret')
+  GitHubStore.beginAuth({ clientId: 'my-client-id', clientSecret: 'my-secret' })
   const stored = JSON.parse(sessionStorage.getItem('gh:auth'))
   expect(stored.clientId).toBe('my-client-id')
   expect(stored.clientSecret).toBe('my-secret')
@@ -37,7 +37,7 @@ test('beginAuth stores credentials and state in sessionStorage', () => {
 })
 
 test('beginAuth redirects to GitHub OAuth URL', () => {
-  GitHubStore.beginAuth('my-client-id', 'my-secret')
+  GitHubStore.beginAuth({ clientId: 'my-client-id', clientSecret: 'my-secret' })
   expect(lastRedirect?.includes('github.com/login/oauth/authorize')).toBe(true)
   expect(lastRedirect?.includes('client_id=my-client-id')).toBe(true)
   expect(lastRedirect?.includes('scope=repo')).toBe(true)
@@ -323,23 +323,23 @@ test('readAll returns participants with entries and latest, skipping _ entries',
   expect(result.find(r => r.username === '_archive')).toBeFalsy()
 })
 
-test('saveRecentRepo stores repoFullName in localStorage', () => {
-  GitHubStore.saveRecentRepo('johndoe/potluck-test')
-  const stored = GitHubStore.getRecentRepos()
-  expect(stored.includes('johndoe/potluck-test')).toBe(true)
+test('saveRecentSpace stores spaceId in localStorage', () => {
+  GitHubStore.saveRecentSpace('johndoe/potluck-test')
+  const stored = GitHubStore.getRecentSpaces()
+  expect(stored).toEqual(['johndoe/potluck-test'])
 })
 
-test('getRecentRepos deduplicates and caps at 5', () => {
-  for (let i = 0; i < 7; i++) GitHubStore.saveRecentRepo(`owner/repo-${i}`)
-  const stored = GitHubStore.getRecentRepos()
+test('getRecentSpaces deduplicates and caps at 5', () => {
+  for (let i = 0; i < 7; i++) GitHubStore.saveRecentSpace(`owner/repo-${i}`)
+  const stored = GitHubStore.getRecentSpaces()
   expect(stored.length <= 5).toBe(true)
 })
 
-test('saveRecentRepo moves existing entry to front on re-save', () => {
-  GitHubStore.saveRecentRepo('owner/repo-a')
-  GitHubStore.saveRecentRepo('owner/repo-b')
-  GitHubStore.saveRecentRepo('owner/repo-a')  // re-save moves to front
-  const stored = GitHubStore.getRecentRepos()
+test('saveRecentSpace moves existing entry to front on re-save', () => {
+  GitHubStore.saveRecentSpace('owner/repo-a')
+  GitHubStore.saveRecentSpace('owner/repo-b')
+  GitHubStore.saveRecentSpace('owner/repo-a')  // re-save moves to front
+  const stored = GitHubStore.getRecentSpaces()
   expect(stored[0]).toBe('owner/repo-a')
   expect(stored[1]).toBe('owner/repo-b')
   expect(stored.length).toBe(2)
@@ -442,7 +442,7 @@ test('archiveSpace sends PATCH with archived:true', async () => {
 
 test('beginAuth requests delete_repo scope', () => {
   lastRedirect = null
-  GitHubStore.beginAuth('my-client-id', 'my-secret')
+  GitHubStore.beginAuth({ clientId: 'my-client-id', clientSecret: 'my-secret' })
   expect(lastRedirect?.includes('delete_repo')).toBe(true)
 })
 
@@ -533,4 +533,20 @@ test('_autoAcceptInvitation returns silently when no pending invitation exists',
   const store = new GitHubStore({ token: 'tok', _username: 'bob' })
   // Must not throw even though no invitation is found
   await expect(store._autoAcceptInvitation('johndoe/potluck')).resolves.toBeUndefined()
+})
+
+test('capabilities() returns all expected flags', () => {
+  const store = new GitHubStore({ token: 'tok' })
+  const caps = store.capabilities()
+  expect(caps.createSpace).toBe(true)
+  expect(caps.join).toBe(true)
+  expect(caps.append).toBe(true)
+  expect(caps.read).toBe(true)
+  expect(caps.readAll).toBe(true)
+  expect(caps.write).toBe(true)
+  expect(caps.addCollaborator).toBe(true)
+  expect(caps.closeSubmissions).toBe(true)
+  expect(caps.archiveSpace).toBe(true)
+  expect(caps.deleteSpace).toBe(true)
+  expect(caps.binaryData).toBe(true)
 })
