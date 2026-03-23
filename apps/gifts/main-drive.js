@@ -10,7 +10,8 @@ import { GoogleDriveStore } from '../../lib/google-drive-store.js'
 // Register a Google OAuth app at console.cloud.google.com.
 // Authorised redirect URI: this page's URL (e.g. http://localhost:5500/apps/gifts/gifts-drive.html)
 // Enable the Google Drive API in the Cloud Console.
-const CLIENT_ID = '<GOOGLE_CLIENT_ID>'
+const CLIENT_ID     = '628327454284-d3dgrhjt7tv1cv9kgtpdbvjo3oj5ubtt.apps.googleusercontent.com'
+const CLIENT_SECRET = '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'
 // ─────────────────────────────────────────────────────────────────────────────
 
 function esc(str) {
@@ -24,7 +25,7 @@ const mode       = params.get('mode')
 const spaceParam = params.get('space')
 
 async function main() {
-  const store = await GoogleDriveStore.init({ clientId: CLIENT_ID })
+  const store = await GoogleDriveStore.init({ clientId: CLIENT_ID, clientSecret: CLIENT_SECRET })
   if (!store) return  // redirecting to Google
 
   if (mode === 'participant') {
