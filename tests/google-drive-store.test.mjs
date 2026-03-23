@@ -353,3 +353,119 @@ test('write creates file if not found', async () => {
   await store.write('_event.json', { closed: true })
   expect(created).toBe(true)
 })
+
+// ── addCollaborator ───────────────────────────────────────────────────────────
+
+test('addCollaborator adds email as editor in email mode', async () => {
+  const store = makeStore()
+  store._folderId = 'folder-abc'
+  let permBody = null
+  mockFetch((url, opts) => {
+    // read _event.json to determine accessMode
+    if (url.includes('drive/v3/files') && !url.includes('upload') && !url.includes('permissions') && !url.includes('alt=media'))
+      return { status: 200, body: { files: [{ id: 'evt', name: '_event.json' }] } }
+    if (url.includes('alt=media'))
+      return { status: 200, body: { accessMode: 'email' } }
+    if (url.includes('permissions') && opts?.method === 'POST') {
+      permBody = JSON.parse(opts.body)
+      return { status: 200, body: {} }
+    }
+    throw new Error(`Unexpected: ${opts?.method} ${url}`)
+  })
+  await store.addCollaborator('bob@gmail.com')
+  expect(permBody).toMatchObject({ role: 'writer', emailAddress: 'bob@gmail.com' })
+})
+
+test('addCollaborator throws in link mode', async () => {
+  const store = makeStore()
+  store._folderId = 'folder-abc'
+  mockFetch((url) => {
+    if (url.includes('drive/v3/files') && !url.includes('alt=media'))
+      return { status: 200, body: { files: [{ id: 'evt', name: '_event.json' }] } }
+    if (url.includes('alt=media'))
+      return { status: 200, body: { accessMode: 'link' } }
+  })
+  await expect(store.addCollaborator('bob@gmail.com'))
+    .rejects.toThrow('not supported in link-access spaces')
+})
+
+// ── closeSubmissions ──────────────────────────────────────────────────────────
+
+test('closeSubmissions writes closed:true to _event.json', async () => {
+  const store = makeStore()
+  store._folderId = 'folder-abc'
+  let writtenData = null
+  mockFetch((url, opts) => {
+    if (url.includes('drive/v3/files') && !url.includes('upload') && !url.includes('alt=media'))
+      return { status: 200, body: { files: [{ id: 'evt', name: '_event.json' }] } }
+    if (url.includes('alt=media'))
+      return { status: 200, body: { name: 'my-event', accessMode: 'email' } }
+    if (url.includes('upload') && opts?.method === 'PATCH') {
+      writtenData = JSON.parse(opts.body)
+      return { status: 200, body: {} }
+    }
+    throw new Error(`Unexpected: ${opts?.method} ${url}`)
+  })
+  await store.closeSubmissions()
+  expect(writtenData.closed).toBe(true)
+  expect(writtenData.name).toBe('my-event')
+})
+
+// ── archiveSpace ──────────────────────────────────────────────────────────────
+
+test('archiveSpace downgrades all non-owner permissions to reader', async () => {
+  const store = makeStore()
+  store._folderId = 'folder-abc'
+  const patched = []
+  mockFetch((url, opts) => {
+    if (opts?.method === 'GET' && url.includes('permissions'))
+      return { status: 200, body: { permissions: [
+        { id: 'p1', role: 'writer' },
+        { id: 'p2', role: 'owner' },
+        { id: 'p3', role: 'writer' },
+      ]}}
+    if (opts?.method === 'PATCH' && url.includes('permissions')) {
+      patched.push(url.split('/').at(-1))
+      return { status: 200, body: {} }
+    }
+    throw new Error(`Unexpected: ${opts?.method} ${url}`)
+  })
+  await store.archiveSpace()
+  expect(patched).toEqual(expect.arrayContaining(['p1', 'p3']))
+  expect(patched).not.toContain('p2')
+})
+
+// ── deleteSpace ───────────────────────────────────────────────────────────────
+
+test('deleteSpace deletes folder and clears state', async () => {
+  const store = makeStore()
+  store._folderId = 'folder-abc'
+  sessionStorage.setItem('gd:folderId', 'folder-abc')
+  let deleted = false
+  mockFetch((url, opts) => {
+    if (opts?.method === 'DELETE') { deleted = true; return { status: 204, body: '' } }
+    throw new Error(`Unexpected: ${opts?.method}`)
+  })
+  await store.deleteSpace()
+  expect(deleted).toBe(true)
+  expect(store._folderId).toBeNull()
+  expect(sessionStorage.getItem('gd:folderId')).toBeNull()
+})
+
+// ── capabilities ──────────────────────────────────────────────────────────────
+
+test('capabilities() returns all expected flags', () => {
+  const store = makeStore()
+  const caps = store.capabilities()
+  expect(caps.createSpace).toBe(true)
+  expect(caps.join).toBe(true)
+  expect(caps.append).toBe(true)
+  expect(caps.read).toBe(true)
+  expect(caps.readAll).toBe(true)
+  expect(caps.write).toBe(true)
+  expect(caps.addCollaborator).toBe(true)
+  expect(caps.closeSubmissions).toBe(true)
+  expect(caps.archiveSpace).toBe(true)
+  expect(caps.deleteSpace).toBe(true)
+  expect(caps.binaryData).toBe(true)
+})
