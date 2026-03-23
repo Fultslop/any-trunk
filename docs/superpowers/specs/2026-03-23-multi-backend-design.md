@@ -261,6 +261,8 @@ static async init({ clientId }) {
     const store = await GoogleDriveStore.completeAuth()
     const returnUrl = sessionStorage.getItem('gd:returnUrl')
     sessionStorage.removeItem('gd:returnUrl')
+    // returnUrl is null only if the user navigated directly to the callback URL
+    // without going through beginAuth. Stripping ?code= from the current URL is the correct fallback.
     location.href = returnUrl ?? location.href.split('?')[0]
     return null
   }
@@ -310,10 +312,13 @@ await store.join(folderId)
 // 1. Set this._folderId = folderId
 // 2. Write gd:folderId to sessionStorage
 // 3. Fetch _event.json from the folder (to verify access and read accessMode)
+// 4. Call GoogleDriveStore.saveRecentSpace(folderId)
 // Returns void. Throws if the folder is inaccessible.
 ```
 
 Unlike `GitHubStore.join(repoFullName, inviteToken)`, no second token is required. In `email` mode the organiser has already granted access via `addCollaborator` before sharing the link. In `link` mode the folder is open to anyone with the ID.
+
+**Precondition for data operations:** `this._folderId` must be set (via `createSpace` or `join`) before calling `append`, `read`, `readAll`, `write`, or any other data operation. `capabilities()` does not guard this — it is the app's responsibility to call `createSpace` or `join` first. Calling a data operation without `_folderId` will throw an internal error.
 
 #### createSpace() and saveRecentSpace
 
@@ -332,11 +337,11 @@ const spaceId = await store.createSpace(name, { accessMode: 'email' })
 `read(path)` accepts a slash-separated path string identical in format to `GitHubStore.read()`. Resolution proceeds as follows:
 
 ```
-read('alice@gmail.com/2026-03-23T10-00.json')
-  → split on '/' → ['alice@gmail.com', '2026-03-23T10-00.json']
+read('alice@gmail.com/2026-03-23T10-00-00.000Z.json')
+  → split on '/' → ['alice@gmail.com', '2026-03-23T10-00-00.000Z.json']
   → resolve 'alice@gmail.com' subfolder: check this._subfolderIdCache,
     or query: name='alice@gmail.com' and '{this._folderId}' in parents
-  → resolve '2026-03-23T10-00.json' file: query name='...' and '{subFolderId}' in parents
+  → resolve '2026-03-23T10-00-00.000Z.json' file: query name='...' and '{subFolderId}' in parents
   → GET /drive/v3/files/{fileId}?alt=media
   → parse JSON, return
 
@@ -376,7 +381,7 @@ Return shape — identical to `GitHubStore.readAll()`:
 [
   {
     username: 'alice@gmail.com',   // Google email address (Drive equivalent of GitHub login)
-    entries:  [{ path: 'alice@gmail.com/2026-03-23T10-00.json', data: { ... } }],
+    entries:  [{ path: 'alice@gmail.com/2026-03-23T10-00-00.000Z.json', data: { ... } }],
     latest:   { ... },             // data from last entry, or null
   },
   ...
@@ -553,7 +558,7 @@ Both backends reach the same clean state via different paths. GitHub needs a Clo
 | L3 | `readAll()` on Drive makes N+2 API calls (1 folder list + N subfolder lists + N×M file reads). Rate limits are generous (12,000 req/min/user) but worth monitoring at scale. |
 | L4 | `list()` is a public method on `GitHubStore` but is used only internally. It is not part of the capability contract and `GoogleDriveStore` implements it as a private helper only. Apps should not depend on `list()` directly. |
 | L5 | `binaryData: true` is declared in `capabilities()` for both backends but the `writeBinary(path, blob)` method is not defined in this spec. The flag signals intent. The method surface is defined in Spec 2 (scavenger hunt). |
-| L6 | _(consolidated into L8)_ |
+| L6 | _(see L8 — token expiry handling)_ |
 | L7 | `GoogleDriveStore.init()` does not accept `folderId` in the config (unlike `GitHubStore.init()` which accepts `repoFullName`). This is intentional: Drive folder IDs are runtime artifacts of `createSpace()`/`join()`, not static config values. Apps that embed a known space in their config should call `init()` then `join(folderId)` in sequence. |
-| L8 | Google OAuth access tokens expire after 1 hour. Token refresh via `gd:refreshToken` is not implemented in this spec. The fallback behavior on 401: clear `gd:token` from sessionStorage and redirect to `beginAuth` (re-auth, not silent failure). This should be replaced with silent refresh (`grant_type=refresh_token` POST to `oauth2.googleapis.com/token`) before production use. |
+| L8 | Google OAuth access tokens expire after 1 hour. Token refresh via `gd:refreshToken` is not implemented in this spec. The fallback behavior on 401 (detected in each API method's error handling, not in `init()`): clear `gd:token` from sessionStorage and redirect to `beginAuth` (re-auth, not silent failure). This should be replaced with silent refresh (`grant_type=refresh_token` POST to `oauth2.googleapis.com/token`) before production use. |
 | L9 | `binaryData: true` for `GitHubStore` stores content as base64 via the Contents API. Base64 inflates size by ~33% and the Contents API has a 100 MB file limit (~75 MB of real binary data). Spec 2 must account for this constraint when designing `writeBinary`. |
