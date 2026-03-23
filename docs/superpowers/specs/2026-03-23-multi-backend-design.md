@@ -1,6 +1,6 @@
 # Multi-Backend Abstraction + Google Drive Adapter — Design Spec
 
-**Date:** 2026-03-23
+**Date:** 2026-03-23  
 **Scope:** Spec 1 of 3 (Capability abstraction + Google Drive adapter). Scavenger hunt app and two-backend demo are separate specs to follow.
 
 ---
@@ -27,6 +27,15 @@ AnyTrunk currently supports a single backing system: GitHub. The library's core 
 - Scavenger hunt demo app (Spec 2).
 - Two-backend side-by-side demo (Spec 3).
 - `writeBinary(path, blob)` method surface — `binaryData` capability is declared in this spec but the method is defined in Spec 2 where it is first needed.
+
+## Validation Demo — gifts-drive.html
+
+To validate `GoogleDriveStore` against a real app without risking regression on the existing GitHub-backed gifts app:
+
+- `apps/gifts/index.html` — unchanged (GitHub backend, current entry point)
+- `apps/gifts/gifts-drive.html` — new file, identical UX to `index.html` but backed by `GoogleDriveStore` via `AnyTrunk.init({ provider: 'google-drive', clientId })`
+
+`gifts-drive.html` is a side-by-side port of `index.html`, not a refactor of it. The two files can diverge where the backends differ (e.g. `accessMode` option in `createSpace`, email display in the participant list). Any capability the gifts app needs that `GoogleDriveStore` cannot provide should be surfaced as a spec gap, not worked around silently.
 
 ---
 
@@ -103,6 +112,7 @@ Each store class should implement these static helpers for app UI code:
 | `tests/github-store.test.mjs` | Update call sites for new `beginAuth` signature and renamed utility methods. Add `capabilities()` tests. |
 | `apps/potluck/index.html` | Update to `AnyTrunk.init(config)`, new `beginAuth` signature, and renamed utility methods. |
 | `apps/gifts/index.html` | Update to `AnyTrunk.init(config)`, new `beginAuth` signature, and renamed utility methods. |
+| `apps/gifts/gifts-drive.html` | New file — gifts app backed by `GoogleDriveStore`. Validates the abstraction layer. |
 | `README.md` (if it exists) | Update `beginAuth` usage examples to config-object signature and renamed utility methods. |
 
 ---
