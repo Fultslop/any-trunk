@@ -1,6 +1,6 @@
 # AnyTrunk — Business Use Case Brainstorm
 
-> Work in progress. Needs validation with someone who has business/enterprise insight.
+> Work in progress. Needs validation with someone who has subject matter/business/enterprise insight.
 
 ---
 

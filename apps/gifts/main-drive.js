@@ -128,6 +128,7 @@ async function renderOrganizer(store) {
   }
 
   await renderDashboard()
+  setInterval(renderDashboard, 60_000)
 }
 
 // ── PARTICIPANT ───────────────────────────────────────────────────────────────
