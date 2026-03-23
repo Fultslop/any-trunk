@@ -384,6 +384,7 @@ test('addCollaborator throws in link mode', async () => {
       return { status: 200, body: { files: [{ id: 'evt', name: '_event.json' }] } }
     if (url.includes('alt=media'))
       return { status: 200, body: { accessMode: 'link' } }
+    throw new Error(`Unexpected: ${opts?.method} ${url}`)
   })
   await expect(store.addCollaborator('bob@gmail.com'))
     .rejects.toThrow('not supported in link-access spaces')
