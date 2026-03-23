@@ -28,7 +28,7 @@ export default {
     }
 
     const { pathname } = new URL(request.url)
-    if (pathname === '/oauth/token')    return handleOAuthToken(body, env)
+    if (pathname === '/oauth/token')     return handleOAuthToken(body, env)
     if (pathname === '/spaces/register') return handleRegister(body, env)
     if (pathname === '/spaces/invite')   return handleInvite(body, env)
     return new Response('Not found', { status: 404, headers: CORS })
@@ -61,32 +61,36 @@ async function handleOAuthToken({ code }, env) {
 
 async function handleRegister({ repo, token }, env) {
   if (!repo || !token) return json({ error: 'missing_fields' }, 400)
+  if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repo)) return json({ error: 'invalid_repo' }, 400)
 
   // {repo} is URL-encoded to avoid key separator issues across KV implementations
   const key = encodeURIComponent(repo)
-  const codeKey  = `repo:${key}:inviteCode`
-  const tokenKey = `repo:${key}:token`
+  const registrationKey = `repo:${key}:registration`
 
   // Idempotent: return existing code if already registered
-  const existing = await env.KV.get(codeKey)
-  if (existing) return json({ inviteCode: existing })
+  const existing = await env.KV.get(registrationKey)
+  if (existing) return json({ inviteCode: JSON.parse(existing).inviteCode })
 
   const inviteCode = Array.from(crypto.getRandomValues(new Uint8Array(12)))
     .map(b => b.toString(16).padStart(2, '0')).join('')
-  await env.KV.put(tokenKey, token)
-  await env.KV.put(codeKey, inviteCode)
+
+  // Store token and code together to reduce race window; expires in 7 days
+  await env.KV.put(registrationKey, JSON.stringify({ token, inviteCode }), {
+    expirationTtl: 7 * 24 * 60 * 60,
+  })
   return json({ inviteCode })
 }
 
 async function handleInvite({ repo, username, inviteCode }, env) {
   if (!repo || !username || !inviteCode) return json({ error: 'missing_fields' }, 400)
+  if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repo)) return json({ error: 'invalid_repo' }, 400)
+  if (!/^[a-zA-Z0-9-]{1,39}$/.test(username)) return json({ error: 'invalid_username' }, 400)
 
   const key = encodeURIComponent(repo)
-  const storedCode = await env.KV.get(`repo:${key}:inviteCode`)
+  const registration = await env.KV.get(`repo:${key}:registration`)
+  if (!registration) return json({ error: 'space_not_registered' }, 404)
+  const { token, inviteCode: storedCode } = JSON.parse(registration)
   if (storedCode !== inviteCode) return json({ error: 'invalid_invite_code' }, 403)
-
-  const token = await env.KV.get(`repo:${key}:token`)
-  if (!token) return json({ error: 'no_organizer_token' }, 403)
 
   const [owner, repoName] = repo.split('/')
   const resp = await fetch(
@@ -105,7 +109,8 @@ async function handleInvite({ repo, username, inviteCode }, env) {
   // GitHub returns 204 for both new invite and already-a-collaborator — both are success
   if (!resp.ok) {
     const err = await resp.text()
-    return json({ error: `github_api_error: ${err}` }, 502)
+    console.error(`GitHub API error adding collaborator: ${err}`)
+    return json({ error: 'github_api_error' }, 502)
   }
   return json({ ok: true })
 }
