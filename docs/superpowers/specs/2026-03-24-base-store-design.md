@@ -53,6 +53,8 @@ This spec adds `BaseStore` to enforce the contract, eliminates post-init static 
 | `apps/gifts/main.js` | Remove `hasToken()` pre-check. Handle `{ status: 'onboarding' }` from `init()`. |
 | `apps/gifts/participant.js` | Update `renderOnboardingGate` signature to accept `{ url, hint }` result object. |
 | `apps/gifts/main-drive.js` | Remove static `getRecentSpaces()` call → `store.getRecentSpaces()`. Replace `store._folderId =` → `store.setSpace()`. Add `{ status: 'onboarding' }` handling for participant mode. |
+| `README.md` | `store.username` → `store.userId` (3 occurrences). `GitHubStore.saveRecentRepo` → `GitHubStore.saveRecentSpace`. `GitHubStore.getRecentRepos()` → `store.getRecentSpaces()`. Mark Google Drive backend and provider interface as complete in roadmap. |
+| `docs/tutorial-gifts.md` | `store.userEmail` → `store.userId` in Drive participant section. Update prose reference to internal field `_folderId` → `_spaceId`. |
 
 ### Deleted files
 
