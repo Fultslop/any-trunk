@@ -155,7 +155,7 @@ test('join calls _autoAcceptInvitation unconditionally and accepts if invitation
   expect(acceptCall.headers.Authorization).toBe('Bearer gho_participant_token')
 })
 
-test('join saves to gifts:recentRepos (not potluck:recentRepos)', async () => {
+test('join saves to gh:recentSpaces', async () => {
   mockFetch((url, opts) => {
     if (url.includes('/spaces/invite')) return { status: 200, body: { ok: true } }
     if (url.includes('repository_invitations') && (opts.method ?? 'GET') === 'GET') {
@@ -169,21 +169,28 @@ test('join saves to gifts:recentRepos (not potluck:recentRepos)', async () => {
   })
   await store.join('alice/birthday-2026', 'code')
 
-  const gifts = JSON.parse(localStorage.getItem('gifts:recentRepos') ?? '[]')
-  const potluck = JSON.parse(localStorage.getItem('potluck:recentRepos') ?? '[]')
-  expect(gifts).toContain('alice/birthday-2026')
-  expect(potluck).toHaveLength(0)
+  const spaces = JSON.parse(localStorage.getItem('gh:recentSpaces') ?? '[]')
+  expect(spaces).toContain('alice/birthday-2026')
 })
 
-// ── saveRecentRepo / getRecentRepos ────────────────────────────────────────
+// ── saveRecentSpace / getRecentSpaces ──────────────────────────────────────
 
-test('saveRecentRepo uses gifts:recentRepos key', () => {
-  WorkerGitHubStore.saveRecentRepo('alice/birthday-2026')
-  expect(JSON.parse(localStorage.getItem('gifts:recentRepos'))).toContain('alice/birthday-2026')
-  expect(localStorage.getItem('potluck:recentRepos')).toBeNull()
+test('saveRecentSpace uses gh:recentSpaces key', () => {
+  WorkerGitHubStore.saveRecentSpace('alice/birthday-2026')
+  expect(JSON.parse(localStorage.getItem('gh:recentSpaces'))).toContain('alice/birthday-2026')
 })
 
-test('getRecentRepos reads from gifts:recentRepos', () => {
-  localStorage.setItem('gifts:recentRepos', JSON.stringify(['alice/birthday-2026']))
-  expect(WorkerGitHubStore.getRecentRepos()).toEqual(['alice/birthday-2026'])
+test('getRecentSpaces reads from gh:recentSpaces', () => {
+  localStorage.setItem('gh:recentSpaces', JSON.stringify(['alice/birthday-2026']))
+  expect(WorkerGitHubStore.getRecentSpaces()).toEqual(['alice/birthday-2026'])
+})
+
+// ── capabilities ───────────────────────────────────────────────────────────
+
+test('capabilities() returns all expected flags', () => {
+  const store = new WorkerGitHubStore({ token: 'tok' })
+  const caps = store.capabilities()
+  expect(caps.createSpace).toBe(true)
+  expect(caps.join).toBe(true)
+  expect(caps.binaryData).toBe(true)
 })
