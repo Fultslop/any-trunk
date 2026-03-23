@@ -196,3 +196,108 @@ test('join throws when folder is inaccessible', async () => {
   mockFetch(() => ({ status: 403, body: 'Forbidden' }))
   await expect(store.join('folder-bad')).rejects.toThrow()
 })
+
+// ── read ─────────────────────────────────────────────────────────────────────
+
+test('read returns null for missing file', async () => {
+  const store = makeStore()
+  store._folderId = 'folder-abc'
+  mockFetch(() => ({ status: 200, body: { files: [] } }))
+  const result = await store.read('_event.json')
+  expect(result).toBeNull()
+})
+
+test('read resolves root file and returns parsed JSON', async () => {
+  const store = makeStore()
+  store._folderId = 'folder-abc'
+  mockFetch((url) => {
+    if (url.includes('drive/v3/files') && !url.includes('alt=media'))
+      return { status: 200, body: { files: [{ id: 'file-123', name: '_event.json' }] } }
+    if (url.includes('alt=media'))
+      return { status: 200, body: { name: 'my-event', accessMode: 'email' } }
+    throw new Error(`Unexpected: ${url}`)
+  })
+  const result = await store.read('_event.json')
+  expect(result).toEqual({ name: 'my-event', accessMode: 'email' })
+})
+
+test('read resolves subfolder file', async () => {
+  const store = makeStore()
+  store._folderId = 'folder-root'
+  mockFetch((url) => {
+    // Find the subfolder
+    if (url.includes('alice%40gmail.com') || url.includes("name='alice@gmail.com'"))
+      return { status: 200, body: { files: [{ id: 'sf-id', name: 'alice@gmail.com' }] } }
+    // Find the file inside the subfolder
+    if (url.includes('sf-id') && !url.includes('alt=media'))
+      return { status: 200, body: { files: [{ id: 'file-id', name: 'entry.json' }] } }
+    // Fetch file content
+    if (url.includes('file-id') && url.includes('alt=media'))
+      return { status: 200, body: { gift: 'book' } }
+    throw new Error(`Unexpected: ${url}`)
+  })
+  const result = await store.read('alice@gmail.com/entry.json')
+  expect(result).toEqual({ gift: 'book' })
+})
+
+// ── append ───────────────────────────────────────────────────────────────────
+
+test('append creates timestamped file in participant subfolder', async () => {
+  const store = makeStore()
+  store._folderId = 'folder-abc'
+  const createdFiles = []
+  mockFetch((url, opts) => {
+    const body = opts?.body
+    // GET requests — subfolder lookup returns empty (not found)
+    if (opts?.method === 'GET')
+      return { status: 200, body: { files: [] } }
+    // POST to create subfolder (plain JSON body)
+    if (!url.includes('upload') && opts?.method === 'POST') {
+      let parsedBody = null
+      try { parsedBody = body ? JSON.parse(body) : null } catch {}
+      if (parsedBody?.mimeType?.includes('folder'))
+        return { status: 200, body: { id: 'subfolder-id' } }
+    }
+    // Multipart upload for file content
+    if (url.includes('upload/drive') && opts?.method === 'POST') {
+      const nameMatch = body?.match(/"name":"([^"]+)"/)
+      if (nameMatch) createdFiles.push(nameMatch[1])
+      return { status: 200, body: { id: 'file-new' } }
+    }
+    throw new Error(`Unexpected: ${opts?.method} ${url}`)
+  })
+  await store.append({ gift: 'book' }, { prefix: 'alice@gmail.com' })
+  expect(createdFiles.some(f => f.match(/^\d{4}-\d{2}-\d{2}T.*\.json$/))).toBe(true)
+})
+
+// ── write ────────────────────────────────────────────────────────────────────
+
+test('write updates existing file', async () => {
+  const store = makeStore()
+  store._folderId = 'folder-abc'
+  let patchedId = null
+  mockFetch((url, opts) => {
+    if (url.includes('drive/v3/files') && !url.includes('upload'))
+      return { status: 200, body: { files: [{ id: 'existing-id', name: '_event.json' }] } }
+    if (url.includes('upload') && opts?.method === 'PATCH') {
+      patchedId = url.match(/files\/([^?]+)/)?.[1]
+      return { status: 200, body: {} }
+    }
+    throw new Error(`Unexpected: ${opts?.method} ${url}`)
+  })
+  await store.write('_event.json', { closed: true })
+  expect(patchedId).toBe('existing-id')
+})
+
+test('write creates file if not found', async () => {
+  const store = makeStore()
+  store._folderId = 'folder-abc'
+  let created = false
+  mockFetch((url, opts) => {
+    if (!url.includes('upload')) return { status: 200, body: { files: [] } }
+    if (opts?.method === 'POST') { created = true; return { status: 200, body: { id: 'new-id' } } }
+    throw new Error(`Unexpected: ${opts?.method} ${url}`)
+  })
+  await store.write('_event.json', { closed: true })
+  expect(created).toBe(true)
+})
