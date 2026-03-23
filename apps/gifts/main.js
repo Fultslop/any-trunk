@@ -2,6 +2,15 @@ import { WorkerGitHubStore } from '../../lib/github-store-worker.js'
 import { renderOrganizer } from './organizer.js'
 import { renderParticipant, renderOnboardingGate } from './participant.js'
 
+function esc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 // ── CONFIG ────────────────────────────────────────────────────────────────
 // Deploy workers/anytrunk-worker/ to Cloudflare and paste the worker URL here.
 // Register a GitHub OAuth App — put clientSecret in the Worker, not here.
@@ -39,6 +48,6 @@ async function main() {
 
 main().catch(e => {
   document.getElementById('app').innerHTML =
-    `<p class="err">Startup error: ${e.message}</p>`
+    `<p class="err">Startup error: ${esc(e.message)}</p>`
   console.error(e)
 })

@@ -1,5 +1,14 @@
 import { WorkerGitHubStore } from '../../lib/github-store-worker.js'
 
+function esc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export function renderOnboardingGate(repoParam, { clientId, workerUrl }) {
   const app = document.getElementById('app')
   app.innerHTML = `
@@ -26,7 +35,7 @@ export async function renderParticipant(store, repoParam, inviteCode) {
   try {
     await store.join(repoParam, inviteCode)
   } catch (e) {
-    app.innerHTML = `<p class="err">Failed to join: ${e.message}</p>`
+    app.innerHTML = `<p class="err">Failed to join: ${esc(e.message)}</p>`
     return
   }
 
@@ -53,7 +62,7 @@ export async function renderParticipant(store, repoParam, inviteCode) {
 
     app.innerHTML = `
       <h1>Gift Registry</h1>
-      <p>Signed in as: <strong>${store.username}</strong></p>
+      <p>Signed in as: <strong>${esc(store.username)}</strong></p>
       <p>Status: <strong class="badge">joined ✓</strong></p>
 
       <section>
@@ -65,16 +74,16 @@ export async function renderParticipant(store, repoParam, inviteCode) {
 
             let display
             if (claimants.length === 0) {
-              display = `<button class="claim-btn" data-item="${item}">Claim</button>`
+              display = `<button class="claim-btn" data-item="${esc(item)}">Claim</button>`
             } else if (claimants.length > 1) {
-              display = `<span class="conflict">⚠ claimed by ${claimants.join(', ')}</span>`
+              display = `<span class="conflict">⚠ claimed by ${esc(claimants.join(', '))}</span>`
             } else if (myClaim) {
               display = `<span class="yours">You ✓</span>`
             } else {
-              display = `<span class="claimed">claimed by ${claimants[0]}</span>`
+              display = `<span class="claimed">claimed by ${esc(claimants[0])}</span>`
             }
 
-            return `<li>${item} ${display}</li>`
+            return `<li>${esc(item)} ${display}</li>`
           }).join('')}
         </ul>
       </section>
@@ -87,7 +96,7 @@ export async function renderParticipant(store, repoParam, inviteCode) {
           await store.append({ item: btn.dataset.item }, { prefix: store.username })
           await renderWishlist()
         } catch (e) {
-          app.insertAdjacentHTML('beforeend', `<p class="err">${e.message}</p>`)
+          app.insertAdjacentHTML('beforeend', `<p class="err">${esc(e.message)}</p>`)
           btn.disabled = false
         }
       })

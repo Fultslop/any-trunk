@@ -1,5 +1,14 @@
 import { WorkerGitHubStore } from '../../lib/github-store-worker.js'
 
+function esc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export async function renderOrganizer(store, repoParam) {
   const app = document.getElementById('app')
 
@@ -28,12 +37,12 @@ export async function renderOrganizer(store, repoParam) {
     const items = wishlist?.items ?? []
     const inviteCode = activeRepo ? WorkerGitHubStore.getInviteCode(activeRepo) : null
     const joinUrl = inviteCode
-      ? `${location.origin}${location.pathname.replace('index.html', 'index.html')}?mode=participant&repo=${activeRepo}&invite=${inviteCode}`
+      ? `${location.origin}${location.pathname}?mode=participant&repo=${activeRepo}&invite=${inviteCode}`
       : null
 
     app.innerHTML = `
       <h1>Gift Registry — Organizer</h1>
-      <p>Signed in as: <strong>${store.username}</strong></p>
+      <p>Signed in as: <strong>${esc(store.username)}</strong></p>
 
       ${!activeRepo ? `
         <section>
@@ -46,14 +55,14 @@ export async function renderOrganizer(store, repoParam) {
       ${recentRepos.length > 0 && !activeRepo ? `
         <section>
           <h2>Resume</h2>
-          ${recentRepos.map(r => `<button class="resume-btn" data-repo="${r}">${r}</button>`).join('')}
+          ${recentRepos.map(r => `<button class="resume-btn" data-repo="${esc(r)}">${esc(r)}</button>`).join('')}
         </section>
       ` : ''}
 
       ${activeRepo ? `
         <section>
           <h2>Active registry</h2>
-          <p>Repo: <strong>${activeRepo}</strong></p>
+          <p>Repo: <strong>${esc(activeRepo)}</strong></p>
           ${joinUrl
             ? `<button id="copyJoinLink">Copy join link</button>`
             : `<button id="registerBtn">Generate join link</button>`}
@@ -71,9 +80,9 @@ export async function renderOrganizer(store, repoParam) {
               const display = claimants.length === 0
                 ? '<span class="unclaimed">unclaimed</span>'
                 : claimants.length > 1
-                  ? `<span class="conflict">⚠ claimed by ${claimants.join(', ')}</span>`
-                  : `<span class="claimed">→ claimed by ${claimants[0]}</span>`
-              return `<li>${item} ${display}</li>`
+                  ? `<span class="conflict">⚠ claimed by ${esc(claimants.join(', '))}</span>`
+                  : `<span class="claimed">→ claimed by ${esc(claimants[0])}</span>`
+              return `<li>${esc(item)} ${display}</li>`
             }).join('')}
           </ul>
         </section>
@@ -93,7 +102,7 @@ export async function renderOrganizer(store, repoParam) {
         await renderDashboard()
       } catch (e) {
         app.querySelector('.err')?.remove()
-        app.insertAdjacentHTML('beforeend', `<p class="err">${e.message}</p>`)
+        app.insertAdjacentHTML('beforeend', `<p class="err">${esc(e.message)}</p>`)
       }
     })
 
