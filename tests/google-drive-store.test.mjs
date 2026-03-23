@@ -122,3 +122,77 @@ test('init() Branch 3: redirects to Google when no token', async () => {
   await GoogleDriveStore.init({ clientId: 'cid' })
   expect(lastRedirect).toContain('accounts.google.com')
 })
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function makeStore() {
+  return new GoogleDriveStore({ clientId: 'cid', token: 'tok', userEmail: 'alice@gmail.com' })
+}
+
+// ── createSpace ──────────────────────────────────────────────────────────────
+
+test('createSpace creates folder, writes _event.json, returns folderId', async () => {
+  const store = makeStore()
+  mockFetch((url, opts) => {
+    let parsedBody = null
+    try { parsedBody = opts?.body ? JSON.parse(opts.body) : null } catch {}
+    // POST to create folder (plain JSON, not upload)
+    if (!url.includes('upload') && url.includes('drive/v3/files') && opts?.method === 'POST' && parsedBody?.mimeType?.includes('folder'))
+      return { status: 200, body: { id: 'folder-abc' } }
+    // Multipart upload to create _event.json
+    if (url.includes('upload/drive') && opts?.method === 'POST')
+      return { status: 200, body: { id: 'file-evt' } }
+    throw new Error(`Unexpected: ${opts?.method} ${url}`)
+  })
+
+  const spaceId = await store.createSpace('my-event', { accessMode: 'email' })
+  expect(spaceId).toBe('folder-abc')
+  expect(store._folderId).toBe('folder-abc')
+  expect(sessionStorage.getItem('gd:folderId')).toBe('folder-abc')
+  expect(GoogleDriveStore.getRecentSpaces()).toContain('folder-abc')
+})
+
+test('createSpace link mode sets folder link-sharing', async () => {
+  const store = makeStore()
+  const calls = []
+  mockFetch((url, opts) => {
+    calls.push({ url, method: opts?.method })
+    let parsedBody = null
+    try { parsedBody = opts?.body ? JSON.parse(opts.body) : null } catch {}
+    if (!url.includes('upload') && url.includes('drive/v3/files') && opts?.method === 'POST' && parsedBody?.mimeType?.includes('folder'))
+      return { status: 200, body: { id: 'folder-xyz' } }
+    if (url.includes('permissions'))
+      return { status: 200, body: {} }
+    if (url.includes('upload/drive') && opts?.method === 'POST')
+      return { status: 200, body: { id: 'f' } }
+    throw new Error(`Unexpected: ${opts?.method} ${url}`)
+  })
+  await store.createSpace('open-event', { accessMode: 'link' })
+  expect(calls.some(c => c.url.includes('permissions'))).toBe(true)
+})
+
+// ── join ─────────────────────────────────────────────────────────────────────
+
+test('join sets folderId, fetches _event.json, saves to sessionStorage', async () => {
+  const store = makeStore()
+  mockFetch((url) => {
+    // list files query for _event.json
+    if (url.includes('drive/v3/files') && url.includes('_event.json'))
+      return { status: 200, body: { files: [{ id: 'evt-id', name: '_event.json' }] } }
+    // get file content
+    if (url.includes('evt-id') && url.includes('alt=media'))
+      return { status: 200, body: { name: 'my-event', accessMode: 'email' } }
+    throw new Error(`Unexpected: ${url}`)
+  })
+
+  await store.join('folder-abc')
+  expect(store._folderId).toBe('folder-abc')
+  expect(sessionStorage.getItem('gd:folderId')).toBe('folder-abc')
+  expect(GoogleDriveStore.getRecentSpaces()).toContain('folder-abc')
+})
+
+test('join throws when folder is inaccessible', async () => {
+  const store = makeStore()
+  mockFetch(() => ({ status: 403, body: 'Forbidden' }))
+  await expect(store.join('folder-bad')).rejects.toThrow()
+})
