@@ -3,6 +3,7 @@ import { test, expect, beforeEach } from 'vitest'
 import { reset } from './helpers/mock-browser.mjs'
 import { clearFetch, mockFetch } from './helpers/mock-fetch.mjs'
 import { GitHubStore } from '../lib/github-store.js'
+import { BaseStore } from '../lib/base-store.js'
 
 beforeEach(() => {
   reset()
@@ -16,7 +17,7 @@ beforeEach(() => {
 test('GitHubStore can be instantiated', () => {
   const s = new GitHubStore({ clientId: 'id', clientSecret: 'secret' })
   expect(s.isAuthenticated).toBeFalsy()
-  expect(s.username).toBeNull()
+  expect(s.userId).toBeNull()
 })
 
 // Track redirects: override global.location with a settable property descriptor
@@ -66,7 +67,7 @@ test('completeAuth exchanges code for token and stores it', async () => {
 
   const store = await GitHubStore.completeAuth()
   expect(store.isAuthenticated).toBe(true)
-  expect(store.username).toBe('johndoe')
+  expect(store.userId).toBe('johndoe')
   expect(sessionStorage.getItem('gh:token')).toBe('gho_testtoken')
   expect(sessionStorage.getItem('gh:username')).toBe('johndoe')
 })
@@ -94,7 +95,7 @@ test('init rehydrates from sessionStorage when token exists', async () => {
 
   const store = await GitHubStore.init({ clientId: 'id', clientSecret: 'secret' })
   expect(store.isAuthenticated).toBe(true)
-  expect(store.username).toBe('existinguser')
+  expect(store.userId).toBe('existinguser')
 })
 
 test('createSpace creates a private repo and writes _event.json', async () => {
@@ -325,21 +326,20 @@ test('readAll returns participants with entries and latest, skipping _ entries',
 
 test('saveRecentSpace stores spaceId in localStorage', () => {
   GitHubStore.saveRecentSpace('johndoe/potluck-test')
-  const stored = GitHubStore.getRecentSpaces()
+  const stored = new GitHubStore({}).getRecentSpaces()
   expect(stored).toEqual(['johndoe/potluck-test'])
 })
 
 test('getRecentSpaces deduplicates and caps at 5', () => {
   for (let i = 0; i < 7; i++) GitHubStore.saveRecentSpace(`owner/repo-${i}`)
-  const stored = GitHubStore.getRecentSpaces()
-  expect(stored.length <= 5).toBe(true)
+  expect(new GitHubStore({}).getRecentSpaces().length <= 5).toBe(true)
 })
 
 test('saveRecentSpace moves existing entry to front on re-save', () => {
   GitHubStore.saveRecentSpace('owner/repo-a')
   GitHubStore.saveRecentSpace('owner/repo-b')
   GitHubStore.saveRecentSpace('owner/repo-a')  // re-save moves to front
-  const stored = GitHubStore.getRecentSpaces()
+  const stored = new GitHubStore({}).getRecentSpaces()
   expect(stored[0]).toBe('owner/repo-a')
   expect(stored[1]).toBe('owner/repo-b')
   expect(stored.length).toBe(2)
@@ -504,23 +504,30 @@ test('initReadOnly throws a friendly error for private or missing repos', async 
   ).rejects.toThrow('Repo not found or is private')
 })
 
-test('hasToken returns true when token is in sessionStorage', () => {
-  sessionStorage.setItem('gh:token', 'gho_sometoken')
-  expect(GitHubStore.hasToken()).toBe(true)
+test('init returns onboarding sentinel for participant mode when not authenticated', async () => {
+  Object.defineProperty(global, 'location', {
+    configurable: true,
+    get: () => ({ search: '' }),
+    set: () => {},
+  })
+  const result = await GitHubStore.init({
+    clientId: 'id', clientSecret: 'secret', mode: 'participant'
+  })
+  expect(result).not.toBeNull()
+  expect(result.status).toBe('onboarding')
+  expect(typeof result.url).toBe('string')
+  expect(typeof result.hint).toBe('string')
+  expect(typeof result.signIn).toBe('function')
 })
 
-test('hasToken returns false when no token in sessionStorage', () => {
-  expect(GitHubStore.hasToken()).toBe(false)
+test('getOnboardingUrl returns the GitHub signup URL', () => {
+  expect(GitHubStore.getOnboardingUrl()).toBe('https://github.com/signup')
 })
 
-test('onboardingUrl returns the GitHub signup URL', () => {
-  expect(GitHubStore.onboardingUrl()).toBe('https://github.com/signup')
-})
-
-test('onboardingHint returns a non-empty string mentioning Google sign-in', () => {
-  const hint = GitHubStore.onboardingHint()
+test('getOnboardingHint returns a non-empty string mentioning GitHub', () => {
+  const hint = GitHubStore.getOnboardingHint()
   expect(hint && hint.length > 0).toBe(true)
-  expect(hint.toLowerCase().includes('google')).toBe(true)
+  expect(hint.toLowerCase().includes('github')).toBe(true)
 })
 
 test('_autoAcceptInvitation returns silently when no pending invitation exists', async () => {
@@ -535,9 +542,9 @@ test('_autoAcceptInvitation returns silently when no pending invitation exists',
   await expect(store._autoAcceptInvitation('johndoe/potluck')).resolves.toBeUndefined()
 })
 
-test('capabilities() returns all expected flags', () => {
+test('getCapabilities() returns all expected flags', () => {
   const store = new GitHubStore({ token: 'tok' })
-  const caps = store.capabilities()
+  const caps = store.getCapabilities()
   expect(caps.createSpace).toBe(true)
   expect(caps.join).toBe(true)
   expect(caps.append).toBe(true)
@@ -549,4 +556,8 @@ test('capabilities() returns all expected flags', () => {
   expect(caps.archiveSpace).toBe(true)
   expect(caps.deleteSpace).toBe(true)
   expect(caps.binaryData).toBe(true)
+})
+
+test('GitHubStore extends BaseStore', () => {
+  expect(new GitHubStore({}) instanceof BaseStore).toBe(true)
 })
