@@ -1,4 +1,3 @@
-import { GitHubStore } from '../../lib/github-store.js'
 import { esc, setStatus, startPolling } from './helpers.js'
 
 export async function renderOrganizer(store, repoParam) {
@@ -281,8 +280,8 @@ export async function renderOrganizerDashboard(store, repoParam) {
     setStatus('Deleting event...', false)
     try {
       await store.deleteSpace()
-      const key = 'gh:recentSpaces'
-      const repos = JSON.parse(localStorage.getItem(key) ?? '[]')
+      const key = `${store.constructor._storageKey}:recentSpaces`
+      const repos = store.getRecentSpaces()
       localStorage.setItem(key, JSON.stringify(repos.filter(r => r !== store._spaceId)))
       location.href = `${location.pathname}?mode=organizer`
     } catch(e) {
