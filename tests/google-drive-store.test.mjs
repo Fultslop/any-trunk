@@ -494,6 +494,8 @@ test('getCapabilities() returns all expected flags', () => {
   expect(caps.archiveSpace).toBe(true)
   expect(caps.deleteSpace).toBe(true)
   expect(caps.binaryData).toBe(true)
+  expect(caps.delete).toBe(true)
+  expect(caps.findOrCreateSpace).toBe(true)
 })
 
 // ── delete() ────────────────────────────────────────────────────────────────

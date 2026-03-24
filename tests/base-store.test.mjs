@@ -94,6 +94,8 @@ test('instance method stubs throw not implemented', async () => {
   await expect(store.createSpace('name')).rejects.toThrow(/not implemented/)
   await expect(store.join('id')).rejects.toThrow(/not implemented/)
   await expect(store.deleteSpace()).rejects.toThrow(/not implemented/)
+  await expect(store.delete('x.json')).rejects.toThrow(/not implemented/)
+  await expect(store.findOrCreateSpace('name')).rejects.toThrow(/not implemented/)
   expect(() => store.getCapabilities()).toThrow(/not implemented/)
 })
 
