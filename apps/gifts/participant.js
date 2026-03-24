@@ -14,8 +14,8 @@ export function renderOnboardingGate(repoParam, { url, hint, signIn }) {
     <p>You've been invited to a gift registry. Do you have a GitHub account?</p>
     <button id="hasAccount">Yes, sign in with GitHub</button>
     <button id="noAccount">No, create a free account</button>
-    <p id="hint" style="display:none">${hint}
-      <a href="${url}" target="_blank">Create account →</a>
+    <p id="hint" style="display:none">${esc(hint)}
+      <a href="${esc(url)}" target="_blank">Create account →</a>
     </p>
   `
   document.getElementById('hasAccount').addEventListener('click', () => signIn())
