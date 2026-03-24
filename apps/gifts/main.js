@@ -24,20 +24,18 @@ const repoParam   = params.get('repo')
 const inviteParam = params.get('invite')  // opaque invite code (not a PAT)
 
 async function main() {
-  if (mode === 'participant') {
-    const hasCode = new URLSearchParams(location.search).has('code')
-    if (!WorkerGitHubStore.hasToken() && !hasCode) {
-      renderOnboardingGate(repoParam, { clientId: CLIENT_ID, workerUrl: WORKER_URL })
-      return
-    }
-  }
-
-  const store = await WorkerGitHubStore.init({
+  const result = await WorkerGitHubStore.init({
     clientId:     CLIENT_ID,
     workerUrl:    WORKER_URL,
     repoFullName: repoParam,
+    mode,
   })
-  if (!store) return  // redirecting to GitHub
+  if (!result) return
+  if (result.status === 'onboarding') {
+    renderOnboardingGate(repoParam, result)
+    return
+  }
+  const store = result
 
   if (mode === 'participant') {
     await renderParticipant(store, repoParam, inviteParam)

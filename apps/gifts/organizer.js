@@ -13,12 +13,12 @@ export async function renderOrganizer(store, repoParam) {
   const app = document.getElementById('app')
 
   // Resume from URL param or localStorage
-  const recentRepos = WorkerGitHubStore.getRecentSpaces()
+  const recentRepos = store.getRecentSpaces()
   let activeRepo = repoParam ?? null
 
   if (!activeRepo && recentRepos.length > 0) {
     activeRepo = recentRepos[0]
-    store._repoFullName = activeRepo
+    store.setSpace(activeRepo)
   }
 
   async function renderDashboard(wishlistOverride = null) {
@@ -42,7 +42,7 @@ export async function renderOrganizer(store, repoParam) {
 
     app.innerHTML = `
       <h1>Gift Registry — Organizer</h1>
-      <p>Signed in as: <strong>${esc(store.username)}</strong></p>
+      <p>Signed in as: <strong>${esc(store.userId)}</strong></p>
 
       ${!activeRepo ? `
         <section>
@@ -96,7 +96,7 @@ export async function renderOrganizer(store, repoParam) {
       try {
         const repo = await store.createSpace(name)
         activeRepo = repo
-        store._repoFullName = repo
+        store.setSpace(repo)
         await store.write('_wishlist.json', { items: [] })
         await store.register()
         await renderDashboard()
@@ -129,7 +129,7 @@ export async function renderOrganizer(store, repoParam) {
     document.querySelectorAll('.resume-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         activeRepo = btn.dataset.repo
-        store._repoFullName = activeRepo
+        store.setSpace(activeRepo)
         await renderDashboard()
       })
     })

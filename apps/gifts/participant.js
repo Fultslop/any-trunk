@@ -1,5 +1,3 @@
-import { WorkerGitHubStore } from '../../lib/github-store-worker.js'
-
 function esc(str) {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -9,20 +7,18 @@ function esc(str) {
     .replace(/'/g, '&#39;')
 }
 
-export function renderOnboardingGate(repoParam, { clientId, workerUrl }) {
+export function renderOnboardingGate(repoParam, { url, hint, signIn }) {
   const app = document.getElementById('app')
   app.innerHTML = `
     <h1>Gift Registry</h1>
     <p>You've been invited to a gift registry. Do you have a GitHub account?</p>
     <button id="hasAccount">Yes, sign in with GitHub</button>
     <button id="noAccount">No, create a free account</button>
-    <p id="hint" style="display:none">${WorkerGitHubStore.onboardingHint()}
-      <a href="${WorkerGitHubStore.onboardingUrl()}" target="_blank">Create account →</a>
+    <p id="hint" style="display:none">${hint}
+      <a href="${url}" target="_blank">Create account →</a>
     </p>
   `
-  document.getElementById('hasAccount').addEventListener('click', () => {
-    WorkerGitHubStore.beginAuth(clientId, workerUrl)
-  })
+  document.getElementById('hasAccount').addEventListener('click', () => signIn())
   document.getElementById('noAccount').addEventListener('click', () => {
     document.getElementById('hint').style.display = ''
   })
@@ -60,14 +56,14 @@ export async function renderParticipant(store, repoParam, inviteCode) {
 
     // Apply optimistic claim so the UI updates immediately without waiting for GitHub
     if (optimisticClaim && !allClaims[optimisticClaim]) {
-      allClaims[optimisticClaim] = [store.username]
+      allClaims[optimisticClaim] = [store.userId]
     }
 
     const items = wishlist?.items ?? []
 
     app.innerHTML = `
       <h1>Gift Registry</h1>
-      <p>Signed in as: <strong>${esc(store.username)}</strong></p>
+      <p>Signed in as: <strong>${esc(store.userId)}</strong></p>
       <p>Status: <strong class="badge">joined ✓</strong></p>
 
       <section>
@@ -75,7 +71,7 @@ export async function renderParticipant(store, repoParam, inviteCode) {
         <ul id="wishlistItems">
           ${items.map(item => {
             const claimants = allClaims[item] ?? []
-            const myClaim = claimants.includes(store.username)
+            const myClaim = claimants.includes(store.userId)
 
             let display
             if (claimants.length === 0) {
@@ -100,7 +96,7 @@ export async function renderParticipant(store, repoParam, inviteCode) {
         btn.textContent = 'Claiming…'
         btn.disabled = true
         try {
-          await store.append({ item }, { prefix: store.username })
+          await store.append({ item }, { prefix: store.userId })
           await renderWishlist(item)
         } catch (e) {
           app.insertAdjacentHTML('beforeend', `<p class="err">${esc(e.message)}</p>`)
