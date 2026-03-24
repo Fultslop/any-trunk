@@ -26,23 +26,19 @@ async function main() {
     return
   }
 
-  // Participant gate: check auth state before triggering OAuth redirect
-  if (mode === 'participant') {
-    const hasCode = new URLSearchParams(location.search).has('code')
-    if (!GitHubStore.hasToken() && !hasCode) {
-      renderOnboardingGate(repoParam, { clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, corsProxy: CORS_PROXY })
-      return
-    }
-  }
-
-  const store = await GitHubStore.init({
+  const result = await GitHubStore.init({
     clientId:     CLIENT_ID,
     clientSecret: CLIENT_SECRET,
     corsProxy:    CORS_PROXY,
     repoFullName: repoParam,
-    inviteToken:  inviteParam,
+    mode,
   })
-  if (!store) return  // redirecting to GitHub
+  if (!result) return
+  if (result.status === 'onboarding') {
+    renderOnboardingGate(repoParam, result)
+    return
+  }
+  const store = result
 
   if (mode === 'participant') {
     await renderParticipant(store, repoParam, inviteParam)

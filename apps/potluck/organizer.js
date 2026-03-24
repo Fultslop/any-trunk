@@ -4,7 +4,7 @@ import { esc, setStatus, startPolling } from './helpers.js'
 export async function renderOrganizer(store, repoParam) {
   const app = document.getElementById('app')
 
-  if (store._repoFullName) {
+  if (store._spaceId) {
     await renderOrganizerDashboard(store, repoParam)
     return
   }
@@ -12,7 +12,7 @@ export async function renderOrganizer(store, repoParam) {
   const recent = GitHubStore.getRecentSpaces()
   app.innerHTML = `
     <h1>Potluck Organizer</h1>
-    <p class="sub">Signed in as <strong>${esc(store.username)}</strong></p>
+    <p class="sub">Signed in as <strong>${esc(store.userId)}</strong></p>
 
     <div class="section">
       <strong>Create new event</strong>
@@ -51,8 +51,8 @@ export async function renderOrganizerDashboard(store, repoParam) {
   app.innerHTML = `
     <h1>Potluck Organizer</h1>
     <p class="sub">
-      Signed in as <strong>${esc(store.username)}</strong> &nbsp;·&nbsp;
-      <strong>${esc(store._repoFullName)}</strong>
+      Signed in as <strong>${esc(store.userId)}</strong> &nbsp;·&nbsp;
+      <strong>${esc(store._spaceId)}</strong>
     </p>
 
     <div class="section">
@@ -120,9 +120,9 @@ export async function renderOrganizerDashboard(store, repoParam) {
     </div>
   `
 
-  const repoName         = store._repoFullName?.split('/')[1] ?? ''
+  const repoName         = store._spaceId?.split('/')[1] ?? ''
   const suggestedName    = `${repoName}-invite`
-  const joinBase         = `${location.origin}${location.pathname}?mode=participant&repo=${store._repoFullName}`
+  const joinBase         = `${location.origin}${location.pathname}?mode=participant&repo=${store._spaceId}`
   const patInput         = document.getElementById('pat-input')
   const validateBtn      = document.getElementById('validate-btn')
   const validateStatus   = document.getElementById('validate-status')
@@ -131,7 +131,7 @@ export async function renderOrganizerDashboard(store, repoParam) {
   const preview          = document.getElementById('link-preview')
 
   document.getElementById('pat-name-hint').textContent = suggestedName
-  document.getElementById('repo-name-hint').textContent = store._repoFullName ?? ''
+  document.getElementById('repo-name-hint').textContent = store._spaceId ?? ''
   document.getElementById('copy-name-btn').onclick = () => {
     navigator.clipboard.writeText(suggestedName)
     document.getElementById('copy-name-btn').textContent = 'Copied!'
@@ -145,7 +145,7 @@ export async function renderOrganizerDashboard(store, repoParam) {
     validateStatus.textContent = 'Validating...'
     validateStatus.className = ''
     try {
-      const resp = await fetch(`https://api.github.com/repos/${store._repoFullName}`, {
+      const resp = await fetch(`https://api.github.com/repos/${store._spaceId}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
       })
       if (resp.status === 401) {
@@ -228,7 +228,7 @@ export async function renderOrganizerDashboard(store, repoParam) {
   const deleteNameInput  = document.getElementById('delete-name-input')
   const deleteConfirmBtn = document.getElementById('delete-confirm-btn')
   const deleteCancelBtn  = document.getElementById('delete-cancel-btn')
-  const repoShortName    = store._repoFullName?.split('/')[1] ?? store._repoFullName
+  const repoShortName    = store._spaceId?.split('/')[1] ?? store._spaceId
 
   closeBtn.onclick = async () => {
     closeBtn.disabled = true
@@ -283,7 +283,7 @@ export async function renderOrganizerDashboard(store, repoParam) {
       await store.deleteSpace()
       const key = 'gh:recentSpaces'
       const repos = JSON.parse(localStorage.getItem(key) ?? '[]')
-      localStorage.setItem(key, JSON.stringify(repos.filter(r => r !== store._repoFullName)))
+      localStorage.setItem(key, JSON.stringify(repos.filter(r => r !== store._spaceId)))
       location.href = `${location.pathname}?mode=organizer`
     } catch(e) {
       setStatus(e.message)

@@ -1,4 +1,3 @@
-import { GitHubStore } from '../../lib/github-store.js'
 import { esc, setStatus } from './helpers.js'
 
 export async function renderParticipant(store, repoParam, inviteParam) {
@@ -13,7 +12,7 @@ export async function renderParticipant(store, repoParam, inviteParam) {
     <h1>Potluck</h1>
     <p class="sub">
       <strong>${esc(repoParam)}</strong><br>
-      Signed in as <strong>${esc(store.username)}</strong>
+      Signed in as <strong>${esc(store.userId)}</strong>
       &nbsp;·&nbsp; <span id="join-status">Joining...</span>
     </p>
     <div id="status"></div>
@@ -23,7 +22,7 @@ export async function renderParticipant(store, repoParam, inviteParam) {
     if (inviteParam) {
       await store.join(repoParam, inviteParam)
     } else {
-      store._repoFullName = repoParam
+      store.setSpace(repoParam)
     }
     document.getElementById('join-status').innerHTML = `<span class="badge">joined ✓</span>`
   } catch(e) {
@@ -58,7 +57,7 @@ export async function renderParticipant(store, repoParam, inviteParam) {
     btn.disabled = true
     setStatus('Submitting...', false)
     try {
-      await store.append({ dish, note: note || undefined }, { prefix: store.username })
+      await store.append({ dish, note: note || undefined }, { prefix: store.userId })
       document.getElementById('dish-input').value = ''
       document.getElementById('note-input').value = ''
       setStatus('Submitted!', false)
@@ -77,7 +76,7 @@ export async function renderHistory(store) {
   const el = document.getElementById('history')
   if (!el) return
   try {
-    const files = await store.list(store.username)
+    const files = await store.list(store.userId)
     if (!files.length) {
       el.innerHTML = '<p style="color:#888">No submissions yet.</p>'
       return
@@ -108,7 +107,7 @@ export async function renderHistory(store) {
   }
 }
 
-export function renderOnboardingGate(repoParam, { clientId, clientSecret, corsProxy } = {}) {
+export function renderOnboardingGate(_repoParam, { url, hint: hintText, signIn }) {
   const app = document.getElementById('app')
   app.innerHTML = `
     <h1>Potluck</h1>
@@ -124,21 +123,14 @@ export function renderOnboardingGate(repoParam, { clientId, clientSecret, corsPr
     <div id="onboarding-hint" style="display:none;margin-top:1rem"></div>
   `
 
-  document.getElementById('yes-btn').onclick = () => {
-    GitHubStore.init({
-      clientId,
-      clientSecret,
-      corsProxy,
-      repoFullName: repoParam,
-    })
-  }
+  document.getElementById('yes-btn').onclick = () => signIn()
 
   document.getElementById('no-btn').onclick = () => {
     const hint = document.getElementById('onboarding-hint')
     hint.style.display = 'block'
     hint.innerHTML = `
-      <p>${esc(GitHubStore.onboardingHint())}</p>
-      <a href="${esc(GitHubStore.onboardingUrl())}" target="_blank">
+      <p>${esc(hintText)}</p>
+      <a href="${esc(url)}" target="_blank">
         Create a free GitHub account →
       </a>
       <p style="font-size:0.85rem;color:#555;margin-top:0.75rem">
