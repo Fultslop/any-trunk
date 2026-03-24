@@ -60,6 +60,18 @@ The "Continue with Local Files →" button click in `service-select.js` counts a
 
 Returns the root folder's name (e.g. `'my-hunts'`), surfaced from `rootHandle.name`.
 
+### `static _storageKey`
+
+`'local'` — used by `BaseStore.getRecentSpaces()` / `saveRecentSpace()` to namespace localStorage keys.
+
+### `static getOnboardingUrl()`
+
+Returns `null` — there is no external account to create for local file storage. The `service-select` view uses this to conditionally show an "onboarding" link; returning `null` means no link is shown.
+
+### `static getOnboardingHint()`
+
+Returns `'Pick any folder on your computer to store hunt data.'`
+
 ---
 
 ## Method Specifications
@@ -67,6 +79,8 @@ Returns the root folder's name (e.g. `'my-hunts'`), surfaced from `rootHandle.na
 ### `static async init(config, { _rootHandle } = {})`
 
 Standard `init()` entrypoint. The `_rootHandle` bypass param skips IndexedDB and picker in tests (same pattern as `GitHubStore`'s `token` param bypassing OAuth).
+
+If `showDirectoryPicker()` is cancelled by the user, the browser throws an `AbortError`. `init()` lets this propagate — `service-select.js` catches it in its `try/catch` and displays the error message, which is the correct behaviour (the user deliberately cancelled).
 
 ### `async createSpace(name, opts = {})`
 
@@ -85,6 +99,7 @@ Standard `init()` entrypoint. The `_rootHandle` bypass param skips IndexedDB and
 
 1. Get space dir handle: `rootHandle.getDirectoryHandle(this._spaceId)`
 2. Call `spaceDir.remove({recursive: true})`
+3. Call `setSpace(null)` to clear `_spaceId`
 
 Note: `FileSystemHandle.remove()` requires Chrome 110+. Acceptable for a dev/testing store.
 
@@ -102,15 +117,16 @@ Note: `FileSystemHandle.remove()` requires Chrome 110+. Acceptable for a dev/tes
 
 ### `async readAll()`
 
-1. Iterate the space directory with `values()`
+1. Iterate the space directory with `values()` — each yielded entry is `{ name, kind }`
 2. Skip entries whose name starts with `_` (library metadata — per CLAUDE.md invariant)
-3. Skip subdirectories
-4. Read and parse all remaining `.json` files
-5. Return array of parsed values
+3. Skip entries where `kind === 'directory'` (only reads top-level files — see L4)
+4. For each remaining entry, re-fetch the file handle via `getFileHandle(entry.name)` to call `.getFile()` (do not use the yielded entry directly — see mock note below)
+5. Read text, JSON.parse each file
+6. Return array of parsed values
 
 ### `async append(data, opts = {})`
 
-Write to `${opts.prefix ?? 'entries'}/${new Date().toISOString()}.json`.
+Delegates to `this.write(\`${opts.prefix ?? 'entries'}/${new Date().toISOString()}.json\`, data)`. Parent subdirectory is created by `write()` if it does not exist.
 
 ### `async delete(path)`
 
@@ -158,7 +174,7 @@ node = { kind: 'directory', children: Map<name, node> }
 | `getFileHandle(name, {create})` | Returns file node; throws `DOMException` `'NotFoundError'` if absent and `create: false` |
 | `getFile()` | Returns `{ text: async () => node.content }` |
 | `createWritable()` | Returns `{ write(str) { node.content = str }, close() {} }` |
-| `values()` | Async generator yielding `{ name, kind }` for each child |
+| `values()` | Async generator yielding plain `{ name, kind }` objects (not real `FileSystemHandle` instances — `readAll()` re-fetches handles via `getFileHandle()` rather than using the yielded object directly) |
 | `remove({recursive})` | Deletes node from parent; throws if non-empty dir and `recursive` not set |
 | `name` | The node's own name (set on construction) |
 | `queryPermission()` | Returns `'granted'` |
