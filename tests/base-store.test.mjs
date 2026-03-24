@@ -79,6 +79,11 @@ test('getOnboardingUrl stub throws not implemented', () => {
   expect(() => S.getOnboardingUrl()).toThrow(/not implemented/)
 })
 
+test('getOnboardingHint stub throws not implemented', () => {
+  class S extends BaseStore { static _storageKey = 'ts' }
+  expect(() => S.getOnboardingHint()).toThrow(/not implemented/)
+})
+
 test('instance method stubs throw not implemented', async () => {
   class S extends BaseStore { static _storageKey = 'ts' }
   const store = new S()
