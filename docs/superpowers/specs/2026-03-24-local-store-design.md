@@ -66,11 +66,29 @@ Returns the root folder's name (e.g. `'my-hunts'`), surfaced from `rootHandle.na
 
 ### `static getOnboardingUrl()`
 
-Returns `null` — there is no external account to create for local file storage. The `service-select` view uses this to conditionally show an "onboarding" link; returning `null` means no link is shown.
+Returns a platform-appropriate `file://` URL pointing to the recommended app-data parent directory. The user is dropped into the `Users/` or `home/` directory (username is not accessible from a static browser context) and navigates from there to create the `AnyTrunk` subfolder.
+
+```js
+static getOnboardingUrl() {
+  const p = navigator.platform
+  if (p.startsWith('Win')) return 'file:///C:/Users/'
+  if (p.startsWith('Mac')) return 'file:///Users/'
+  return 'file:///home/'
+}
+```
 
 ### `static getOnboardingHint()`
 
-Returns `'Pick any folder on your computer to store hunt data.'`
+Returns a platform-appropriate path suggestion:
+
+```js
+static getOnboardingHint() {
+  const p = navigator.platform
+  if (p.startsWith('Win')) return 'Suggested location: AppData\\Local\\AnyTrunk'
+  if (p.startsWith('Mac')) return 'Suggested location: Library/Application Support/AnyTrunk'
+  return 'Suggested location: ~/.local/share/anytrunk'
+}
+```
 
 ---
 
