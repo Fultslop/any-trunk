@@ -495,3 +495,55 @@ test('getCapabilities() returns all expected flags', () => {
   expect(caps.deleteSpace).toBe(true)
   expect(caps.binaryData).toBe(true)
 })
+
+// ── delete() ────────────────────────────────────────────────────────────────
+
+function driveStore(spaceId = 'folder-root') {
+  const s = new GoogleDriveStore({ token: 'tok', _folderId: spaceId })
+  return s
+}
+
+test('delete resolves file ID and sends DELETE request', async () => {
+  const store = driveStore('space-123')
+  const calls = []
+  mockFetch((url, opts) => {
+    calls.push({ url, method: opts.method })
+    // _findFile for 'foo.json' in space-123
+    if (opts.method === 'GET' && url.includes('drive/v3/files') && !url.includes('/files/')) {
+      return { status: 200, body: { files: [{ id: 'file-abc', name: 'foo.json' }] } }
+    }
+    // DELETE
+    if (opts.method === 'DELETE') return { status: 204, body: '' }
+  })
+  await store.delete('foo.json')
+  const deleteCall = calls.find(c => c.method === 'DELETE')
+  expect(deleteCall).toBeDefined()
+  expect(deleteCall.url).toContain('file-abc')
+})
+
+test('delete returns silently when file not found', async () => {
+  const store = driveStore('space-123')
+  mockFetch(() => ({ status: 200, body: { files: [] } }))
+  await expect(store.delete('missing.json')).resolves.toBeUndefined()
+})
+
+test('delete resolves subfolder then file for nested path', async () => {
+  const store = driveStore('space-123')
+  let callCount = 0
+  mockFetch((url, opts) => {
+    callCount++
+    if (opts.method === 'GET') {
+      if (callCount === 1) return { status: 200, body: { files: [{ id: 'sub-folder-id', name: 'locations' }] } }
+      return { status: 200, body: { files: [{ id: 'file-xyz', name: 'anne-frank.json' }] } }
+    }
+    return { status: 204, body: '' }
+  })
+  await store.delete('locations/anne-frank.json')
+  expect(callCount).toBe(3) // 2 finds + 1 delete
+})
+
+test('delete returns silently when subfolder not found', async () => {
+  const store = driveStore('space-123')
+  mockFetch(() => ({ status: 200, body: { files: [] } }))
+  await expect(store.delete('locations/missing.json')).resolves.toBeUndefined()
+})
