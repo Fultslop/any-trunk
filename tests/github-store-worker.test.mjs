@@ -64,7 +64,7 @@ test('completeAuth POSTs to workerUrl/oauth/token (not cors-anywhere)', async ()
   expect(tokenCall.body.code).toBe('mycode')
   expect(store).toBeInstanceOf(WorkerGitHubStore)  // not a plain GitHubStore
   expect(store.isAuthenticated).toBe(true)
-  expect(store.username).toBe('alice')
+  expect(store.userId).toBe('alice')
   expect(store._workerUrl).toBe('https://worker.example.com')
   expect(sessionStorage.getItem('gh:token')).toBe('gho_testtoken')
 })
@@ -182,14 +182,15 @@ test('saveRecentSpace uses gh:recentSpaces key', () => {
 
 test('getRecentSpaces reads from gh:recentSpaces', () => {
   localStorage.setItem('gh:recentSpaces', JSON.stringify(['alice/birthday-2026']))
-  expect(WorkerGitHubStore.getRecentSpaces()).toEqual(['alice/birthday-2026'])
+  const store = new WorkerGitHubStore({ token: 'tok' })
+  expect(store.getRecentSpaces()).toEqual(['alice/birthday-2026'])
 })
 
 // ── capabilities ───────────────────────────────────────────────────────────
 
-test('capabilities() returns all expected flags', () => {
+test('getCapabilities() returns all expected flags', () => {
   const store = new WorkerGitHubStore({ token: 'tok' })
-  const caps = store.capabilities()
+  const caps = store.getCapabilities()
   expect(caps.createSpace).toBe(true)
   expect(caps.join).toBe(true)
   expect(caps.binaryData).toBe(true)
