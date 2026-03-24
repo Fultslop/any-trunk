@@ -9,7 +9,7 @@ export async function renderOrganizer(store, repoParam) {
     return
   }
 
-  const recent = GitHubStore.getRecentSpaces()
+  const recent = store.getRecentSpaces()
   app.innerHTML = `
     <h1>Potluck Organizer</h1>
     <p class="sub">Signed in as <strong>${esc(store.userId)}</strong></p>
