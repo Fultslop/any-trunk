@@ -607,3 +607,33 @@ test('delete throws when DELETE returns non-404 error', async () => {
   })
   await expect(store.delete('locations/foo.json')).rejects.toThrow()
 })
+
+// ── findOrCreateSpace() ───────────────────────────────────────────────────
+
+test('findOrCreateSpace sets spaceId and returns full_name when repo exists', async () => {
+  const store = new GitHubStore({ token: 'tok', _username: 'alice' })
+  mockFetch(() => ({ status: 200, body: { full_name: 'alice/anytrunk-hunt' } }))
+  const id = await store.findOrCreateSpace('anytrunk-hunt')
+  expect(id).toBe('alice/anytrunk-hunt')
+  expect(store._spaceId).toBe('alice/anytrunk-hunt')
+})
+
+test('findOrCreateSpace creates repo and returns full_name when not found', async () => {
+  const store = new GitHubStore({ token: 'tok', _username: 'alice' })
+  let callCount = 0
+  mockFetch((url, opts) => {
+    callCount++
+    if (callCount === 1) return { status: 404, body: {} }  // GET /repos/alice/anytrunk-hunt
+    if (callCount === 2) return { status: 201, body: { full_name: 'alice/anytrunk-hunt', owner: { login: 'alice' } } }  // POST /user/repos
+    return { status: 201, body: { content: { sha: 'init' } } }  // PUT _event.json
+  })
+  const id = await store.findOrCreateSpace('anytrunk-hunt')
+  expect(id).toBe('alice/anytrunk-hunt')
+  expect(store._spaceId).toBe('alice/anytrunk-hunt')
+})
+
+test('findOrCreateSpace throws on unexpected API error', async () => {
+  const store = new GitHubStore({ token: 'tok', _username: 'alice' })
+  mockFetch(() => ({ status: 500, body: 'Server error' }))
+  await expect(store.findOrCreateSpace('anytrunk-hunt')).rejects.toThrow()
+})
