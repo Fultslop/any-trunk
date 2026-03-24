@@ -1,0 +1,33 @@
+/* JSON Forms vanilla renderer: scope overrides to avoid Tailwind preflight conflicts */
+.jf-form label {
+  display: block;
+  font-weight: 500;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+  color: #374151;
+}
+
+.jf-form input[type="text"],
+.jf-form input[type="number"],
+.jf-form textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.875rem;
+  background: white;
+}
+
+.jf-form input[type="text"]:focus,
+.jf-form input[type="number"]:focus,
+.jf-form textarea:focus {
+  outline: 2px solid #7c3aed;
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.jf-form .validation_error {
+  color: #dc2626;
+  font-size: 0.75rem;
+  margin-top: 0.125rem;
+}
