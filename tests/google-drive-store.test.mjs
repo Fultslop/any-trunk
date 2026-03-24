@@ -547,3 +547,34 @@ test('delete returns silently when subfolder not found', async () => {
   mockFetch(() => ({ status: 200, body: { files: [] } }))
   await expect(store.delete('locations/missing.json')).resolves.toBeUndefined()
 })
+
+// ── findOrCreateSpace() ──────────────────────────────────────────────────
+
+test('findOrCreateSpace sets spaceId and returns folder ID when folder exists', async () => {
+  const store = new GoogleDriveStore({ token: 'tok' })
+  mockFetch((url, opts) => {
+    // _findFile(name, 'root') — GET /drive/v3/files?q=...
+    if (opts.method === 'GET') return { status: 200, body: { files: [{ id: 'folder-abc', name: 'anytrunk-hunt' }] } }
+  })
+  const id = await store.findOrCreateSpace('anytrunk-hunt')
+  expect(id).toBe('folder-abc')
+  expect(store._spaceId).toBe('folder-abc')
+})
+
+test('findOrCreateSpace creates folder and returns its ID when not found', async () => {
+  const store = new GoogleDriveStore({ token: 'tok', userEmail: 'alice@example.com' })
+  let callCount = 0
+  mockFetch((url, opts) => {
+    callCount++
+    // _findFile returns empty → not found
+    if (callCount === 1) return { status: 200, body: { files: [] } }
+    // POST /drive/v3/files (createSpace — create folder)
+    if (callCount === 2 && opts.method === 'POST' && url.includes('/drive/v3/files') && !url.includes('upload'))
+      return { status: 200, body: { id: 'new-folder-id' } }
+    // _writeFile for _event.json (multipart upload)
+    return { status: 200, body: { id: 'event-file-id' } }
+  })
+  const id = await store.findOrCreateSpace('anytrunk-hunt')
+  expect(id).toBe('new-folder-id')
+  expect(store._spaceId).toBe('new-folder-id')
+})
