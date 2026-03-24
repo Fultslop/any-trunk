@@ -152,19 +152,23 @@ Navigate to file (handling nested path), call `.remove()`. Return silently on `N
 
 ### `async join(spaceId, opts)`
 
-Throws: `'LocalStore does not support join() — local spaces cannot be shared'`
+Calls `setSpace(spaceId)` and returns. Local files have no access control — any tab with the same root folder can read/write any space by name, so "joining" is simply navigating to the space. This enables two-tab organizer+participant testing against the same root folder.
+
+### `async addCollaborator(identity, opts)`
+
+No-op — returns immediately. Local files have no access control to configure; the collaborator implicitly has access by virtue of sharing the same filesystem.
 
 ### `getCapabilities()`
 
 ```js
 {
   createSpace:       true,
-  join:              false,
+  join:              true,
   append:            true,
   read:              true,
   readAll:           true,
   write:             true,
-  addCollaborator:   false,
+  addCollaborator:   true,
   closeSubmissions:  false,
   archiveSpace:      false,
   deleteSpace:       true,
@@ -216,7 +220,7 @@ import { LocalStore } from '../../lib/local-store.js'
   id:    'local',
   label: 'Local Files',
   icon:  '📂',
-  hint:  'Saves to a folder on your computer. Good for testing.',
+  hint:  'Saves to a folder on your computer. For testing purposes only.',
   Store: LocalStore,
   config: {},
 },
@@ -230,7 +234,7 @@ No other app changes are required. `LocalStore` implements the full `BaseStore` 
 
 | # | Limitation |
 |---|---|
-| L1 | `join()` not supported — local files cannot be shared between users |
-| L2 | `deleteSpace()` requires Chrome 110+ (`FileSystemHandle.remove()`) |
-| L3 | No multi-tab safety — concurrent writes from two tabs will race |
-| L4 | `readAll()` only reads top-level `.json` files; does not recurse into subdirs |
+| L1 | `deleteSpace()` requires Chrome 110+ (`FileSystemHandle.remove()`) |
+| L2 | No multi-tab write safety — concurrent writes from two tabs will race |
+| L3 | `readAll()` only reads top-level `.json` files; does not recurse into subdirs |
+| L4 | `addCollaborator` is a no-op — access control is not enforced on local files |
