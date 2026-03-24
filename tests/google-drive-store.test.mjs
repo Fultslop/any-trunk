@@ -2,6 +2,7 @@ import { test, expect, beforeEach } from 'vitest'
 import { reset, setLocation } from './helpers/mock-browser.mjs'
 import { clearFetch, mockFetch } from './helpers/mock-fetch.mjs'
 import { GoogleDriveStore } from '../lib/google-drive-store.js'
+import { BaseStore } from '../lib/base-store.js'
 
 let lastRedirect = null
 Object.defineProperty(global, 'location', {
@@ -23,33 +24,57 @@ beforeEach(() => {
 
 // ── static utilities ────────────────────────────────────────────────────────
 
-test('hasToken returns false when no token in sessionStorage', () => {
-  expect(GoogleDriveStore.hasToken()).toBe(false)
+test('init returns onboarding sentinel for participant mode when not authenticated', async () => {
+  const result = await GoogleDriveStore.init({ clientId: 'id', mode: 'participant' })
+  expect(result).not.toBeNull()
+  expect(result.status).toBe('onboarding')
+  expect(typeof result.url).toBe('string')
+  expect(typeof result.hint).toBe('string')
+  expect(typeof result.signIn).toBe('function')
 })
 
-test('hasToken returns true when gd:token present', () => {
-  sessionStorage.setItem('gd:token', 'some-token')
-  expect(GoogleDriveStore.hasToken()).toBe(true)
+test('getOnboardingUrl returns Google signup URL', () => {
+  expect(GoogleDriveStore.getOnboardingUrl()).toBe('https://accounts.google.com/signup')
 })
 
-test('onboardingUrl returns Google signup URL', () => {
-  expect(GoogleDriveStore.onboardingUrl()).toBe('https://accounts.google.com/signup')
-})
-
-test('onboardingHint returns non-empty string', () => {
-  expect(typeof GoogleDriveStore.onboardingHint()).toBe('string')
-  expect(GoogleDriveStore.onboardingHint().length).toBeGreaterThan(0)
+test('getOnboardingHint returns non-empty string', () => {
+  expect(typeof GoogleDriveStore.getOnboardingHint()).toBe('string')
+  expect(GoogleDriveStore.getOnboardingHint().length).toBeGreaterThan(0)
 })
 
 test('saveRecentSpace persists to gd:recentSpaces', () => {
   GoogleDriveStore.saveRecentSpace('folder-123')
-  const stored = GoogleDriveStore.getRecentSpaces()
+  const stored = new GoogleDriveStore({}).getRecentSpaces()
   expect(stored).toEqual(['folder-123'])
 })
 
 test('getRecentSpaces deduplicates and caps at 5', () => {
   for (let i = 0; i < 7; i++) GoogleDriveStore.saveRecentSpace(`folder-${i}`)
-  expect(GoogleDriveStore.getRecentSpaces()).toHaveLength(5)
+  expect(new GoogleDriveStore({}).getRecentSpaces()).toHaveLength(5)
+})
+
+test('userId returns userEmail', () => {
+  const store = new GoogleDriveStore({ clientId: 'id', token: 'tok', userEmail: 'bob@example.com' })
+  expect(store.userId).toBe('bob@example.com')
+})
+
+test('setSpace persists folderId to sessionStorage', () => {
+  const store = new GoogleDriveStore({ clientId: 'id', token: 'tok' })
+  store.setSpace('folder-xyz')
+  expect(store._spaceId).toBe('folder-xyz')
+  expect(sessionStorage.getItem('gd:folderId')).toBe('folder-xyz')
+})
+
+test('setSpace(null) removes folderId from sessionStorage', () => {
+  sessionStorage.setItem('gd:folderId', 'old-folder')
+  const store = new GoogleDriveStore({ clientId: 'id', token: 'tok' })
+  store.setSpace(null)
+  expect(store._spaceId).toBeNull()
+  expect(sessionStorage.getItem('gd:folderId')).toBeNull()
+})
+
+test('GoogleDriveStore extends BaseStore', () => {
+  expect(new GoogleDriveStore({}) instanceof BaseStore).toBe(true)
 })
 
 // ── beginAuth ───────────────────────────────────────────────────────────────
@@ -147,9 +172,9 @@ test('createSpace creates folder, writes _event.json, returns folderId', async (
 
   const spaceId = await store.createSpace('my-event', { accessMode: 'email' })
   expect(spaceId).toBe('folder-abc')
-  expect(store._folderId).toBe('folder-abc')
+  expect(store._spaceId).toBe('folder-abc')
   expect(sessionStorage.getItem('gd:folderId')).toBe('folder-abc')
-  expect(GoogleDriveStore.getRecentSpaces()).toContain('folder-abc')
+  expect(new GoogleDriveStore({}).getRecentSpaces()).toContain('folder-abc')
 })
 
 test('createSpace link mode sets folder link-sharing', async () => {
@@ -186,9 +211,9 @@ test('join sets folderId, fetches _event.json, saves to sessionStorage', async (
   })
 
   await store.join('folder-abc')
-  expect(store._folderId).toBe('folder-abc')
+  expect(store._spaceId).toBe('folder-abc')
   expect(sessionStorage.getItem('gd:folderId')).toBe('folder-abc')
-  expect(GoogleDriveStore.getRecentSpaces()).toContain('folder-abc')
+  expect(new GoogleDriveStore({}).getRecentSpaces()).toContain('folder-abc')
 })
 
 test('join throws when folder is inaccessible', async () => {
@@ -201,7 +226,7 @@ test('join throws when folder is inaccessible', async () => {
 
 test('read returns null for missing file', async () => {
   const store = makeStore()
-  store._folderId = 'folder-abc'
+  store._spaceId = 'folder-abc'
   mockFetch(() => ({ status: 200, body: { files: [] } }))
   const result = await store.read('_event.json')
   expect(result).toBeNull()
@@ -209,7 +234,7 @@ test('read returns null for missing file', async () => {
 
 test('read resolves root file and returns parsed JSON', async () => {
   const store = makeStore()
-  store._folderId = 'folder-abc'
+  store._spaceId = 'folder-abc'
   mockFetch((url) => {
     if (url.includes('drive/v3/files') && !url.includes('alt=media'))
       return { status: 200, body: { files: [{ id: 'file-123', name: '_event.json' }] } }
@@ -223,7 +248,7 @@ test('read resolves root file and returns parsed JSON', async () => {
 
 test('read resolves subfolder file', async () => {
   const store = makeStore()
-  store._folderId = 'folder-root'
+  store._spaceId = 'folder-root'
   mockFetch((url) => {
     // Find the subfolder
     if (url.includes('alice%40gmail.com') || url.includes("name='alice@gmail.com'"))
@@ -244,7 +269,7 @@ test('read resolves subfolder file', async () => {
 
 test('append creates timestamped file in participant subfolder', async () => {
   const store = makeStore()
-  store._folderId = 'folder-abc'
+  store._spaceId = 'folder-abc'
   const createdFiles = []
   mockFetch((url, opts) => {
     const body = opts?.body
@@ -274,7 +299,7 @@ test('append creates timestamped file in participant subfolder', async () => {
 
 test('readAll returns participant entries sorted by username', async () => {
   const store = makeStore()
-  store._folderId = 'folder-root'
+  store._spaceId = 'folder-root'
 
   mockFetch((url) => {
     // List subfolders of root — match by folderId in the query string
@@ -306,7 +331,7 @@ test('readAll returns participant entries sorted by username', async () => {
 
 test('readAll skips _ prefixed folders', async () => {
   const store = makeStore()
-  store._folderId = 'folder-root'
+  store._spaceId = 'folder-root'
   mockFetch((url) => {
     if (url.includes('folder-root') && url.includes('google-apps.folder'))
       return { status: 200, body: { files: [
@@ -326,7 +351,7 @@ test('readAll skips _ prefixed folders', async () => {
 
 test('write updates existing file', async () => {
   const store = makeStore()
-  store._folderId = 'folder-abc'
+  store._spaceId = 'folder-abc'
   let patchedId = null
   mockFetch((url, opts) => {
     if (url.includes('drive/v3/files') && !url.includes('upload'))
@@ -343,7 +368,7 @@ test('write updates existing file', async () => {
 
 test('write creates file if not found', async () => {
   const store = makeStore()
-  store._folderId = 'folder-abc'
+  store._spaceId = 'folder-abc'
   let created = false
   mockFetch((url, opts) => {
     if (!url.includes('upload')) return { status: 200, body: { files: [] } }
@@ -358,7 +383,7 @@ test('write creates file if not found', async () => {
 
 test('addCollaborator adds email as editor in email mode', async () => {
   const store = makeStore()
-  store._folderId = 'folder-abc'
+  store._spaceId = 'folder-abc'
   let permBody = null
   mockFetch((url, opts) => {
     // read _event.json to determine accessMode
@@ -378,7 +403,7 @@ test('addCollaborator adds email as editor in email mode', async () => {
 
 test('addCollaborator throws in link mode', async () => {
   const store = makeStore()
-  store._folderId = 'folder-abc'
+  store._spaceId = 'folder-abc'
   mockFetch((url) => {
     if (url.includes('drive/v3/files') && !url.includes('alt=media'))
       return { status: 200, body: { files: [{ id: 'evt', name: '_event.json' }] } }
@@ -394,7 +419,7 @@ test('addCollaborator throws in link mode', async () => {
 
 test('closeSubmissions writes closed:true to _event.json', async () => {
   const store = makeStore()
-  store._folderId = 'folder-abc'
+  store._spaceId = 'folder-abc'
   let writtenData = null
   mockFetch((url, opts) => {
     if (url.includes('drive/v3/files') && !url.includes('upload') && !url.includes('alt=media'))
@@ -416,7 +441,7 @@ test('closeSubmissions writes closed:true to _event.json', async () => {
 
 test('archiveSpace downgrades all non-owner permissions to reader', async () => {
   const store = makeStore()
-  store._folderId = 'folder-abc'
+  store._spaceId = 'folder-abc'
   const patched = []
   mockFetch((url, opts) => {
     if (opts?.method === 'GET' && url.includes('permissions'))
@@ -440,7 +465,7 @@ test('archiveSpace downgrades all non-owner permissions to reader', async () => 
 
 test('deleteSpace deletes folder and clears state', async () => {
   const store = makeStore()
-  store._folderId = 'folder-abc'
+  store._spaceId = 'folder-abc'
   sessionStorage.setItem('gd:folderId', 'folder-abc')
   let deleted = false
   mockFetch((url, opts) => {
@@ -449,15 +474,15 @@ test('deleteSpace deletes folder and clears state', async () => {
   })
   await store.deleteSpace()
   expect(deleted).toBe(true)
-  expect(store._folderId).toBeNull()
+  expect(store._spaceId).toBeNull()
   expect(sessionStorage.getItem('gd:folderId')).toBeNull()
 })
 
-// ── capabilities ──────────────────────────────────────────────────────────────
+// ── getCapabilities ──────────────────────────────────────────────────────────
 
-test('capabilities() returns all expected flags', () => {
+test('getCapabilities() returns all expected flags', () => {
   const store = makeStore()
-  const caps = store.capabilities()
+  const caps = store.getCapabilities()
   expect(caps.createSpace).toBe(true)
   expect(caps.join).toBe(true)
   expect(caps.append).toBe(true)
