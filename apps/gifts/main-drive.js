@@ -10,8 +10,8 @@ import { GoogleDriveStore } from '../../lib/google-drive-store.js'
 // Register a Google OAuth app at console.cloud.google.com.
 // Authorised redirect URI: this page's URL (e.g. http://localhost:5500/apps/gifts/gifts-drive.html)
 // Enable the Google Drive API in the Cloud Console.
-const CLIENT_ID     = '628327454284-d3dgrhjt7tv1cv9kgtpdbvjo3oj5ubtt.apps.googleusercontent.com'
-const CLIENT_SECRET = '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'
+const CLIENT_ID     = '<CLIENT_ID>'
+const CLIENT_SECRET = '<CLIENT_SECRET>'
 // ─────────────────────────────────────────────────────────────────────────────
 
 function esc(str) {
@@ -25,8 +25,14 @@ const mode       = params.get('mode')
 const spaceParam = params.get('space')
 
 async function main() {
-  const store = await GoogleDriveStore.init({ clientId: CLIENT_ID, clientSecret: CLIENT_SECRET })
-  if (!store) return  // redirecting to Google
+  const result = await GoogleDriveStore.init({ clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, mode })
+  if (!result) return  // redirecting to Google
+  if (result.status === 'onboarding') {
+    // main-drive.js has a local renderOnboardingGate — update it to accept { url, hint, signIn }
+    renderOnboardingGate(null, result)
+    return
+  }
+  const store = result
 
   if (mode === 'participant') {
     await renderParticipant(store)
@@ -39,10 +45,10 @@ async function main() {
 
 async function renderOrganizer(store) {
   const app     = document.getElementById('app')
-  const recentSpaces = GoogleDriveStore.getRecentSpaces()
+  const recentSpaces = store.getRecentSpaces()
   let activeSpace    = spaceParam ?? recentSpaces[0] ?? null
 
-  if (activeSpace) store._folderId = activeSpace
+  if (activeSpace) store.setSpace(activeSpace)
 
   async function renderDashboard() {
     const wishlist    = activeSpace ? await store.read('_wishlist.json') : null
@@ -153,7 +159,7 @@ async function renderParticipant(store) {
 
   app.innerHTML = `
     <h1>🎁 Gift Registry (Google Drive)</h1>
-    <p>Signed in as: ${esc(store.userEmail)}</p>
+    <p>Signed in as: ${esc(store.userId)}</p>
     <h2>Pick a gift</h2>
     ${items.length === 0
       ? '<p>No items on the wish list yet. Check back later.</p>'
@@ -169,7 +175,7 @@ async function renderParticipant(store) {
   document.getElementById('btnClaim')?.addEventListener('click', async () => {
     const selected = document.querySelector('input[name="item"]:checked')?.value
     if (!selected) return
-    await store.append({ item: selected }, { prefix: store.userEmail })
+    await store.append({ item: selected }, { prefix: store.userId })
     document.getElementById('status').textContent = `You claimed: ${selected}`
   })
 }
