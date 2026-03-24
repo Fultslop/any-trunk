@@ -226,3 +226,26 @@ test('append respects opts.prefix', async () => {
   const submissionsDir = await spaceDir.getDirectoryHandle('submissions')
   expect(submissionsDir.kind).toBe('directory')
 })
+
+// ── join() ────────────────────────────────────────────────────────────────
+
+test('join sets _spaceId to the given spaceId', async () => {
+  const root  = createMockFilesystem()
+  const store = await LocalStore.init({}, { _rootHandle: root })
+  await store.join('hunt-abc123')
+  expect(store._spaceId).toBe('hunt-abc123')
+})
+
+test('join resolves without error', async () => {
+  const root  = createMockFilesystem()
+  const store = await LocalStore.init({}, { _rootHandle: root })
+  await expect(store.join('any-space')).resolves.toBeUndefined()
+})
+
+// ── addCollaborator() ─────────────────────────────────────────────────────
+
+test('addCollaborator resolves without error (no-op)', async () => {
+  const root  = createMockFilesystem()
+  const store = await LocalStore.init({}, { _rootHandle: root })
+  await expect(store.addCollaborator('someone@example.com')).resolves.toBeUndefined()
+})
