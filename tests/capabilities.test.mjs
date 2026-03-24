@@ -3,7 +3,7 @@ import { assertCapabilities } from '../lib/capabilities.js'
 
 test('assertCapabilities passes when all required caps present', () => {
   const store = {
-    capabilities: () => ({ append: true, read: true }),
+    getCapabilities: () => ({ append: true, read: true }),
     constructor: { name: 'TestStore' },
   }
   expect(() => assertCapabilities(store, ['append', 'read'])).not.toThrow()
@@ -11,7 +11,7 @@ test('assertCapabilities passes when all required caps present', () => {
 
 test('assertCapabilities throws listing all missing caps', () => {
   const store = {
-    capabilities: () => ({ append: true }),
+    getCapabilities: () => ({ append: true }),
     constructor: { name: 'TestStore' },
   }
   expect(() => assertCapabilities(store, ['append', 'read', 'write']))
@@ -20,7 +20,7 @@ test('assertCapabilities throws listing all missing caps', () => {
 
 test('assertCapabilities passes with empty required list', () => {
   const store = {
-    capabilities: () => ({}),
+    getCapabilities: () => ({}),
     constructor: { name: 'TestStore' },
   }
   expect(() => assertCapabilities(store, [])).not.toThrow()
