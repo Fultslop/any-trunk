@@ -1,6 +1,7 @@
 // apps/hunt/hunt.js
 import { WorkerGitHubStore } from '../../lib/github-store-worker.js'
 import { GoogleDriveStore }   from '../../lib/google-drive-store.js'
+import { LocalStore }         from '../../lib/local-store.js'
 import { renderServiceSelect } from './views/service-select.js'
 import { renderSpaceList }     from './views/space-list.js'
 import { renderHuntEditor }    from './views/hunt-editor.js'
@@ -24,6 +25,14 @@ const SERVICES = [
     hint:  'Easy sharing. Needs a Google account.',
     Store: GoogleDriveStore,
     config: { clientId: '<CLIENT_ID>', clientSecret: '<CLIENT_SECRET>' },
+  },
+  {
+    id:    'local',
+    label: 'Local Files',
+    icon:  '📂',
+    hint:  'Saves to a folder on your computer. For testing purposes only.',
+    Store: LocalStore,
+    config: {},
   },
 ]
 
