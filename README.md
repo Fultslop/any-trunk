@@ -33,7 +33,7 @@ The current implementation uses **GitHub** as the storage backend via the GitHub
   await store.write('config.json', { theme: 'dark' })
 
   // append a timestamped entry (append-only log model)
-  await store.append({ dish: 'tiramisu' }, { prefix: store.username })
+  await store.append({ dish: 'tiramisu' }, { prefix: store.userId })
 
   // read everything back
   const participants = await store.readAll()
@@ -68,7 +68,7 @@ const store = await GitHubStore.init({
 })
 
 store.isAuthenticated  // boolean
-store.username         // authenticated user's GitHub login
+store.userId           // authenticated user's GitHub login
 ```
 
 Lower-level auth methods (used internally by `init`):
@@ -106,7 +106,7 @@ await store.write('config.json', { key: 'value' })
 
 // Append a timestamped document. Writes to {prefix}/{iso-timestamp}.json.
 // Lexicographic order of filenames = chronological order.
-await store.append({ dish: 'lasagna' }, { prefix: store.username })
+await store.append({ dish: 'lasagna' }, { prefix: store.userId })
 
 // Read a single document. Returns null if not found.
 const data = await store.read('config.json')
@@ -123,11 +123,11 @@ const all = await store.readAll()
 ### Local persistence
 
 ```js
-// Save a repo to localStorage for one-click resume.
-GitHubStore.saveRecentRepo(repoFullName)
+// Save a space to localStorage for one-click resume.
+GitHubStore.saveRecentSpace(spaceId)
 
-// Returns up to 5 most-recently-used repos.
-GitHubStore.getRecentRepos()
+// Returns up to 5 most-recently-used spaces (call on a store instance).
+store.getRecentSpaces()
 // → ['{owner}/{repo}', ...]
 ```
 
@@ -207,8 +207,8 @@ D1 + D2 + D3 collapse into a single small Cloudflare Worker — the recommended 
 ## Roadmap
 
 - [ ] GitLab backend
-- [ ] Google Drive backend
-- [ ] Provider interface (extract after second backend is proven)
+- [x] Google Drive backend
+- [x] Provider interface (`BaseStore` abstract class)
 - [ ] Cloudflare Worker for token exchange (fixes D1–D3)
 
 ---

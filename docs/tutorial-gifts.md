@@ -308,7 +308,7 @@ Open the invite link in a **private/incognito window**.
 
 2. The participant view loads automatically.
 
-   > `store.join(folderId)` sets `_folderId` on the store and reads `_event.json` to
+   > `store.join(folderId)` sets the active space on the store and reads `_event.json` to
    > confirm the space exists. In link-sharing mode, no collaborator invite or token
    > exchange is needed — Account B's own Drive token is sufficient.
 
@@ -317,7 +317,7 @@ Open the invite link in a **private/incognito window**.
 
 3. The wish list appears. Select an item and click **Claim item**.
 
-   > The app calls `store.append({ item }, { prefix: store.userEmail })`. A subfolder
+   > The app calls `store.append({ item }, { prefix: store.userId })`. A subfolder
    > named after Account B's email (e.g. `bob@gmail.com/`) is created inside the space
    > folder, and a timestamped JSON file is written inside it. Email address as namespace
    > replaces GitHub username.
