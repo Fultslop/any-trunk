@@ -69,6 +69,22 @@ test('completeAuth POSTs to workerUrl/oauth/token (not cors-anywhere)', async ()
   expect(sessionStorage.getItem('gh:token')).toBe('gho_testtoken')
 })
 
+test('init returns onboarding sentinel for participant mode when not authenticated', async () => {
+  Object.defineProperty(global, 'location', {
+    configurable: true,
+    get: () => ({ search: '' }),
+    set: () => {},
+  })
+  const result = await WorkerGitHubStore.init({
+    clientId: 'id', workerUrl: 'https://worker.example.com', mode: 'participant'
+  })
+  expect(result).not.toBeNull()
+  expect(result.status).toBe('onboarding')
+  expect(typeof result.url).toBe('string')
+  expect(typeof result.hint).toBe('string')
+  expect(typeof result.signIn).toBe('function')
+})
+
 // ── register ───────────────────────────────────────────────────────────────
 
 test('register POSTs to workerUrl/spaces/register and stores inviteCode in localStorage', async () => {
@@ -169,7 +185,7 @@ test('join saves to gh:recentSpaces', async () => {
   })
   await store.join('alice/birthday-2026', 'code')
 
-  const spaces = JSON.parse(localStorage.getItem('gh:recentSpaces') ?? '[]')
+  const spaces = store.getRecentSpaces()
   expect(spaces).toContain('alice/birthday-2026')
 })
 
