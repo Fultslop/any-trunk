@@ -24,11 +24,27 @@ const params     = new URLSearchParams(location.search)
 const mode       = params.get('mode')
 const spaceParam = params.get('space')
 
+function renderOnboardingGate(spaceParam, { url, hint, signIn }) {
+  const app = document.getElementById('app')
+  app.innerHTML = `
+    <h1>🎁 Gift Registry (Google Drive)</h1>
+    <p>You need a Google account to participate.</p>
+    <button id="yes-btn">Sign in with Google</button>
+    <button id="no-btn">I don't have an account</button>
+    <p id="hint" style="display:none">${esc(hint)}
+      <a href="${esc(url)}" target="_blank">Create account →</a>
+    </p>
+  `
+  document.getElementById('yes-btn').onclick = () => signIn()
+  document.getElementById('no-btn').onclick = () => {
+    document.getElementById('hint').style.display = 'block'
+  }
+}
+
 async function main() {
   const result = await GoogleDriveStore.init({ clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, mode })
   if (!result) return  // redirecting to Google
   if (result.status === 'onboarding') {
-    // main-drive.js has a local renderOnboardingGate — update it to accept { url, hint, signIn }
     renderOnboardingGate(null, result)
     return
   }
@@ -111,6 +127,7 @@ async function renderOrganizer(store) {
       const accessMode = document.querySelector('input[name="mode"]:checked').value
       if (!name) return
       activeSpace = await store.createSpace(name, { accessMode })
+      store.setSpace(activeSpace)
       await renderDashboard()
     })
 
