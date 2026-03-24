@@ -561,3 +561,49 @@ test('getCapabilities() returns all expected flags', () => {
 test('GitHubStore extends BaseStore', () => {
   expect(new GitHubStore({}) instanceof BaseStore).toBe(true)
 })
+
+// ── delete() ──────────────────────────────────────────────────────────────
+
+test('delete fetches SHA then sends DELETE request', async () => {
+  const store = new GitHubStore({ token: 'tok', repoFullName: 'alice/hunt-abc' })
+  const calls = []
+  mockFetch((url, opts) => {
+    calls.push({ url, method: opts.method, body: opts.body ? JSON.parse(opts.body) : undefined })
+    if (opts.method === 'GET')    return { status: 200, body: { sha: 'abc123', content: '' } }
+    if (opts.method === 'DELETE') return { status: 200, body: {} }
+  })
+  await store.delete('locations/foo.json')
+  expect(calls).toHaveLength(2)
+  expect(calls[0].method).toBe('GET')
+  expect(calls[0].url).toContain('/repos/alice/hunt-abc/contents/locations/foo.json')
+  expect(calls[1].method).toBe('DELETE')
+  expect(calls[1].url).toContain('/repos/alice/hunt-abc/contents/locations/foo.json')
+  expect(calls[1].body.sha).toBe('abc123')
+  expect(calls[1].body.message).toBe('delete locations/foo.json')
+})
+
+test('delete returns silently when GET returns 404 (already deleted)', async () => {
+  const store = new GitHubStore({ token: 'tok', repoFullName: 'alice/hunt-abc' })
+  mockFetch(() => ({ status: 404, body: {} }))
+  await expect(store.delete('locations/missing.json')).resolves.toBeUndefined()
+})
+
+test('delete returns silently when DELETE returns 404 (race condition)', async () => {
+  const store = new GitHubStore({ token: 'tok', repoFullName: 'alice/hunt-abc' })
+  let callCount = 0
+  mockFetch((url, opts) => {
+    callCount++
+    if (opts.method === 'GET') return { status: 200, body: { sha: 'abc123', content: '' } }
+    return { status: 404, body: {} }
+  })
+  await expect(store.delete('locations/foo.json')).resolves.toBeUndefined()
+})
+
+test('delete throws when DELETE returns non-404 error', async () => {
+  const store = new GitHubStore({ token: 'tok', repoFullName: 'alice/hunt-abc' })
+  mockFetch((url, opts) => {
+    if (opts.method === 'GET')    return { status: 200, body: { sha: 'abc123', content: '' } }
+    if (opts.method === 'DELETE') return { status: 500, body: 'Internal Server Error' }
+  })
+  await expect(store.delete('locations/foo.json')).rejects.toThrow()
+})
