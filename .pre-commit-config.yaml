@@ -13,3 +13,11 @@ repos:
         args: []
         types: [javascript]
         pass_filenames: true
+
+      - id: npm-test
+        name: npm test
+        entry: npm test
+        language: system
+        pass_contents_only: false  
+        pass_filenames: false
+        files: \.(js|jsx|ts|tsx)$
