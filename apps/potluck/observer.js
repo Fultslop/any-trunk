@@ -1,28 +1,24 @@
-import { GitHubStore } from '../../lib/github-store.js'
-import { esc, startPolling } from './helpers.js'
+import { GitHubStore } from '../../lib/github-store.js';
+import { esc, startPolling } from './helpers.js';
 
-export async function renderObserver(repoParam) {
-  const app = document.getElementById('app')
-  if (!repoParam) {
-    app.innerHTML = `<p>Invalid observer link — missing <code>repo</code> parameter.</p>`
-    return
+export async function renderObserver(repoParameter) {
+  const app = document.querySelector('#app');
+  if (!repoParameter) {
+    app.innerHTML = '<p>Invalid observer link — missing <code>repo</code> parameter.</p>';
+    return;
   }
-  let store
+  let store;
   try {
-    store = await GitHubStore.initReadOnly({ repoFullName: repoParam })
-  } catch (e) {
-    if (e.message.includes('not found or is private')) {
-      app.innerHTML = `<p>This event is private. You need an invitation to participate.</p>`
-    } else {
-      app.innerHTML = `<p class="err">Could not load event: ${esc(e.message)}</p>`
-    }
-    return
+    store = await GitHubStore.initReadOnly({ repoFullName: repoParameter });
+  } catch (error) {
+    app.innerHTML = error.message.includes('not found or is private') ? '<p>This event is private. You need an invitation to participate.</p>' : `<p class="err">Could not load event: ${esc(error.message)}</p>`;
+    return;
   }
 
   app.innerHTML = `
     <h1>Potluck</h1>
     <p class="sub">
-      <strong>${esc(repoParam)}</strong> &nbsp;·&nbsp;
+      <strong>${esc(repoParameter)}</strong> &nbsp;·&nbsp;
       <span style="color:#888">Read-only view</span>
       <span style="font-size:0.8rem;color:#888"> (refreshes every 30s)</span>
     </p>
@@ -32,45 +28,45 @@ export async function renderObserver(repoParam) {
       </p>
     </div>
     <div id="responses-table">Loading...</div>
-  `
+  `;
 
   async function refreshObserver() {
-    const el = document.getElementById('responses-table')
-    if (!el) return
+    const element = document.querySelector('#responses-table');
+    if (!element) return;
     try {
-      const eventMeta = await store.read('_event.json')
-      const closedBanner = document.getElementById('closed-banner')
-      if (closedBanner) closedBanner.style.display = eventMeta?.closed ? 'block' : 'none'
-      const participants = await store.readAll()
-      if (!participants.length) {
-        el.innerHTML = '<p style="color:#888;margin-top:0.5rem">No responses yet.</p>'
-        return
+      const eventMeta = await store.read('_event.json');
+      const closedBanner = document.querySelector('#closed-banner');
+      if (closedBanner) closedBanner.style.display = eventMeta?.closed ? 'block' : 'none';
+      const participants = await store.readAll();
+      if (participants.length === 0) {
+        element.innerHTML = '<p style="color:#888;margin-top:0.5rem">No responses yet.</p>';
+        return;
       }
-      el.innerHTML = `<table>
+      element.innerHTML = `<table>
         <thead><tr><th>Participant</th><th>Dish</th><th>Note</th><th>Time</th></tr></thead>
         <tbody>
-          ${participants.map(p => {
-            const last = p.entries[p.entries.length - 1]
-            const time = last
-              ? new Date((last.path.split('/').pop() ?? '').replace('.json','')
-                  .replace(/T(\d{2})-(\d{2})-(\d{2})/, 'T$1:$2:$3'))
-                .toLocaleTimeString()
-              : '—'
-            return `<tr>
+          ${participants.map((p) => {
+    const last = p.entries.at(-1);
+    const time = last
+      ? new Date((last.path.split('/').pop() ?? '').replace('.json', '')
+        .replace(/T(\d{2})-(\d{2})-(\d{2})/, 'T$1:$2:$3'))
+        .toLocaleTimeString()
+      : '—';
+    return `<tr>
               <td>${esc(p.username)}</td>
               <td>${esc(p.latest?.dish ?? '—')}</td>
               <td>${esc(p.latest?.note ?? '')}</td>
               <td>${time}</td>
-            </tr>`
-          }).join('')}
+            </tr>`;
+  }).join('')}
         </tbody>
-      </table>`
-    } catch(e) {
-      const el2 = document.getElementById('responses-table')
-      if (el2) el2.innerHTML = `<p class="err">Error: ${esc(e.message)}</p>`
+      </table>`;
+    } catch (error) {
+      const element2 = document.querySelector('#responses-table');
+      if (element2) element2.innerHTML = `<p class="err">Error: ${esc(error.message)}</p>`;
     }
   }
 
-  await refreshObserver()
-  startPolling(refreshObserver, 30_000)
+  await refreshObserver();
+  startPolling(refreshObserver, 30_000);
 }

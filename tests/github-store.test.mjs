@@ -131,7 +131,7 @@ test('_apiCall sends Authorization header with token', async () => {
     return { status: 200, body: { ok: true } }
   })
   const store = new GitHubStore({ token: 'gho_mytoken' })
-  await store._apiCall('GET', '/user')
+  await store.apiCall('GET', '/user')
   expect(capturedHeaders?.Authorization).toBe('Bearer gho_mytoken')
 })
 
@@ -352,19 +352,19 @@ test('_apiCall omits Authorization header when token is null', async () => {
     return { status: 200, body: {} }
   })
   const store = new GitHubStore({})
-  await store._apiCall('GET', '/repos/test/test/contents/')
+  await store.apiCall('GET', '/repos/test/test/contents/')
   expect(capturedHeaders?.Authorization).toBeFalsy()
 })
 
 test('_apiCall throws immediately on write when store is read-only', async () => {
   const store = new GitHubStore({ token: 'tok' })
-  store._readOnly = true
-  await expect(store._apiCall('PUT', '/repos/x/y/contents/foo', { content: 'x' })).rejects.toThrow()
+  store.readOnly = true
+  await expect(store.apiCall('PUT', '/repos/x/y/contents/foo', { content: 'x' })).rejects.toThrow()
 })
 
 test('join throws immediately when store is read-only', async () => {
   const store = new GitHubStore({ token: 'tok', _username: 'alice' })
-  store._readOnly = true
+  store.readOnly = true
   await expect(store.join('owner/repo', 'invite-pat')).rejects.toThrow()
 })
 
@@ -471,7 +471,7 @@ test('deleteSpace throws a friendly error when delete_repo scope is missing', as
 test('deleteSpace throws on read-only store without making a network call', async () => {
   mockFetch(() => { throw new Error('should not make a network call') })
   const store = new GitHubStore({ token: 'tok', repoFullName: 'alice/my-event' })
-  store._readOnly = true
+  store.readOnly = true
   let msg = ''
   try { await store.deleteSpace() } catch(e) { msg = e.message }
   expect(msg.includes('read-only')).toBe(true)
@@ -487,8 +487,8 @@ test('initReadOnly returns a read-only store instance for a public repo', async 
   mockFetch(() => ({ status: 200, body: [] }))
   const store = await GitHubStore.initReadOnly({ repoFullName: 'owner/public-repo' })
   expect(store).toBeTruthy()
-  expect(store._token).toBeFalsy()
-  expect(store._readOnly).toBe(true)
+  expect(store.token).toBeFalsy()
+  expect(store.readOnly).toBe(true)
 })
 
 test('initReadOnly — write operations throw with read-only message', async () => {
@@ -539,7 +539,7 @@ test('_autoAcceptInvitation returns silently when no pending invitation exists',
 
   const store = new GitHubStore({ token: 'tok', _username: 'bob' })
   // Must not throw even though no invitation is found
-  await expect(store._autoAcceptInvitation('johndoe/potluck')).resolves.toBeUndefined()
+  await expect(store.autoAcceptInvitation('johndoe/potluck')).resolves.toBeUndefined()
 })
 
 test('getCapabilities() returns all expected flags', () => {
@@ -617,7 +617,7 @@ test('findOrCreateSpace sets spaceId and returns full_name when repo exists', as
   mockFetch(() => ({ status: 200, body: { full_name: 'alice/anytrunk-hunt' } }))
   const id = await store.findOrCreateSpace('anytrunk-hunt')
   expect(id).toBe('alice/anytrunk-hunt')
-  expect(store._spaceId).toBe('alice/anytrunk-hunt')
+  expect(store.spaceId).toBe('alice/anytrunk-hunt')
 })
 
 test('findOrCreateSpace creates repo and returns full_name when not found', async () => {
@@ -631,7 +631,7 @@ test('findOrCreateSpace creates repo and returns full_name when not found', asyn
   })
   const id = await store.findOrCreateSpace('anytrunk-hunt')
   expect(id).toBe('alice/anytrunk-hunt')
-  expect(store._spaceId).toBe('alice/anytrunk-hunt')
+  expect(store.spaceId).toBe('alice/anytrunk-hunt')
 })
 
 test('findOrCreateSpace throws on unexpected API error', async () => {

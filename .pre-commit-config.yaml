@@ -3,3 +3,13 @@ repos:
     rev: v8.18.2
     hooks:
       - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: eslint
+        name: ESLint
+        language: node
+        entry: npx eslint
+        args: []
+        types: [javascript]
+        pass_filenames: true

@@ -4,28 +4,30 @@
 //   ?mode=organizer            → organizer view (create/manage event)
 //   ?mode=participant&space=X  → participant view (join + claim)
 
-import { GoogleDriveStore } from '../../lib/google-drive-store.js'
+import { GoogleDriveStore } from '../../lib/google-drive-store.js';
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 // Register a Google OAuth app at console.cloud.google.com.
 // Authorised redirect URI: this page's URL (e.g. http://localhost:5500/apps/gifts/gifts-drive.html)
 // Enable the Google Drive API in the Cloud Console.
-const CLIENT_ID     = '<CLIENT_ID>'
-const CLIENT_SECRET = '<CLIENT_SECRET>'
+const CLIENT_ID = '<CLIENT_ID>';
+const CLIENT_SECRET = '<CLIENT_SECRET>';
 // ─────────────────────────────────────────────────────────────────────────────
 
-function esc(str) {
-  return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+function esc(string_) {
+  return String(string_)
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('\'', '&#39;');
 }
 
-const params     = new URLSearchParams(location.search)
-const mode       = params.get('mode')
-const spaceParam = params.get('space')
+const parameters = new URLSearchParams(location.search);
+const mode = parameters.get('mode');
+const spaceParameter = parameters.get('space');
 
-function renderOnboardingGate(spaceParam, { url, hint, signIn }) {
-  const app = document.getElementById('app')
+function renderOnboardingGate(_spaceParameter, { url, hint, signIn }) {
+  const app = document.querySelector('#app');
   app.innerHTML = `
     <h1>🎁 Gift Registry (Google Drive)</h1>
     <p>You need a Google account to participate.</p>
@@ -34,54 +36,38 @@ function renderOnboardingGate(spaceParam, { url, hint, signIn }) {
     <p id="hint" style="display:none">${esc(hint)}
       <a href="${esc(url)}" target="_blank">Create account →</a>
     </p>
-  `
-  document.getElementById('yes-btn').onclick = () => signIn()
-  document.getElementById('no-btn').onclick = () => {
-    document.getElementById('hint').style.display = 'block'
-  }
-}
-
-async function main() {
-  const result = await GoogleDriveStore.init({ clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, mode })
-  if (!result) return  // redirecting to Google
-  if (result.status === 'onboarding') {
-    renderOnboardingGate(null, result)
-    return
-  }
-  const store = result
-
-  if (mode === 'participant') {
-    await renderParticipant(store)
-  } else {
-    await renderOrganizer(store)
-  }
+  `;
+  document.querySelector('#yes-btn').addEventListener('click', () => signIn());
+  document.querySelector('#no-btn').addEventListener('click', () => {
+    document.querySelector('#hint').style.display = 'block';
+  });
 }
 
 // ── ORGANIZER ─────────────────────────────────────────────────────────────────
 
 async function renderOrganizer(store) {
-  const app     = document.getElementById('app')
-  const recentSpaces = store.getRecentSpaces()
-  let activeSpace    = spaceParam ?? recentSpaces[0] ?? null
+  const app = document.querySelector('#app');
+  const recentSpaces = store.getRecentSpaces();
+  let activeSpace = spaceParameter ?? recentSpaces[0] ?? null;
 
-  if (activeSpace) store.setSpace(activeSpace)
+  if (activeSpace) store.setSpace(activeSpace);
 
   async function renderDashboard() {
-    const wishlist    = activeSpace ? await store.read('_wishlist.json') : null
-    const participants = activeSpace ? await store.readAll() : []
+    const wishlist = activeSpace ? await store.read('_wishlist.json') : null;
+    const participants = activeSpace ? await store.readAll() : [];
 
-    const claims = {}
+    const claims = {};
     for (const { username, latest } of participants) {
       if (latest?.item) {
-        if (!claims[latest.item]) claims[latest.item] = []
-        claims[latest.item].push(username)
+        if (!claims[latest.item]) claims[latest.item] = [];
+        claims[latest.item].push(username);
       }
     }
 
-    const items     = wishlist?.items ?? []
-    const joinUrl   = activeSpace
+    const items = wishlist?.items ?? [];
+    const joinUrl = activeSpace
       ? `${location.origin}${location.pathname}?mode=participant&space=${activeSpace}`
-      : null
+      : null;
 
     app.innerHTML = `
       <h1>🎁 Gift Registry (Google Drive)</h1>
@@ -106,10 +92,8 @@ async function renderOrganizer(store) {
         <section id="participants">
           <h2>Participants</h2>
           ${participants.length === 0
-            ? '<p>No submissions yet.</p>'
-            : participants.map(p =>
-                `<p>${esc(p.username)}: ${esc(p.latest?.item ?? '—')}</p>`
-              ).join('')}
+    ? '<p>No submissions yet.</p>'
+    : participants.map((p) => `<p>${esc(p.username)}: ${esc(p.latest?.item ?? '—')}</p>`).join('')}
         </section>
         <section id="invite">
           <h2>Invite link</h2>
@@ -120,84 +104,103 @@ async function renderOrganizer(store) {
           <button id="btnDelete">Delete event</button>
         </section>
       ` : ''}
-    `
+    `;
 
-    document.getElementById('btnCreate')?.addEventListener('click', async () => {
-      const name = document.getElementById('evtName').value.trim()
-      const accessMode = document.querySelector('input[name="mode"]:checked').value
-      if (!name) return
-      activeSpace = await store.createSpace(name, { accessMode })
-      store.setSpace(activeSpace)
-      await renderDashboard()
-    })
+    document.querySelector('#btnCreate')?.addEventListener('click', async () => {
+      const name = document.querySelector('#evtName').value.trim();
+      const accessMode = document.querySelector('input[name="mode"]:checked').value;
+      if (!name) return;
+      activeSpace = await store.createSpace(name, { accessMode });
+      store.setSpace(activeSpace);
+      await renderDashboard();
+    });
 
-    document.getElementById('btnSaveWishlist')?.addEventListener('click', async () => {
-      const lines = document.getElementById('itemsInput').value.split('\n').map(s => s.trim()).filter(Boolean)
-      await store.write('_wishlist.json', { items: lines })
-      await renderDashboard()
-    })
+    document.querySelector('#btnSaveWishlist')?.addEventListener('click', async () => {
+      const lines = document.querySelector('#itemsInput').value.split('\n').map((s) => s.trim()).filter(Boolean);
+      await store.write('_wishlist.json', { items: lines });
+      await renderDashboard();
+    });
 
-    document.getElementById('btnClose')?.addEventListener('click', async () => {
-      await store.closeSubmissions()
-      alert('Submissions closed.')
-    })
+    document.querySelector('#btnClose')?.addEventListener('click', async () => {
+      await store.closeSubmissions();
+      alert('Submissions closed.');
+    });
 
-    document.getElementById('btnDelete')?.addEventListener('click', async () => {
-      if (!confirm('Delete this event permanently?')) return
-      await store.deleteSpace()
-      activeSpace = null
-      await renderDashboard()
-    })
+    document.querySelector('#btnDelete')?.addEventListener('click', async () => {
+      if (!confirm('Delete this event permanently?')) return;
+      await store.deleteSpace();
+      activeSpace = null;
+      await renderDashboard();
+    });
   }
 
-  await renderDashboard()
-  setInterval(renderDashboard, 60_000)
+  await renderDashboard();
+  setInterval(renderDashboard, 60_000);
 }
 
 // ── PARTICIPANT ───────────────────────────────────────────────────────────────
 
 async function renderParticipant(store) {
-  const app = document.getElementById('app')
-  if (!spaceParam) {
-    app.innerHTML = `<p>No space ID in URL. Ask the organizer for the participant link.</p>`
-    return
+  const app = document.querySelector('#app');
+  if (!spaceParameter) {
+    app.innerHTML = '<p>No space ID in URL. Ask the organizer for the participant link.</p>';
+    return;
   }
 
-  app.innerHTML = `<p>Joining registry…</p>`
+  app.innerHTML = '<p>Joining registry…</p>';
   try {
-    await store.join(spaceParam)
-  } catch (e) {
-    app.innerHTML = `<p style="color:red">Failed to join: ${esc(e.message)}</p>`
-    return
+    await store.join(spaceParameter);
+  } catch (error) {
+    app.innerHTML = `<p style="color:red">Failed to join: ${esc(error.message)}</p>`;
+    return;
   }
 
-  const wishlist = await store.read('_wishlist.json')
-  const items    = wishlist?.items ?? []
+  const wishlist = await store.read('_wishlist.json');
+  const items = wishlist?.items ?? [];
 
   app.innerHTML = `
     <h1>🎁 Gift Registry (Google Drive)</h1>
     <p>Signed in as: ${esc(store.userId)}</p>
     <h2>Pick a gift</h2>
     ${items.length === 0
-      ? '<p>No items on the wish list yet. Check back later.</p>'
-      : items.map((item, i) => `
+    ? '<p>No items on the wish list yet. Check back later.</p>'
+    : items.map((item) => `
           <label>
             <input type="radio" name="item" value="${esc(item)}"> ${esc(item)}
           </label><br>
         `).join('')}
     <button id="btnClaim">Claim item</button>
     <p id="status"></p>
-  `
+  `;
 
-  document.getElementById('btnClaim')?.addEventListener('click', async () => {
-    const selected = document.querySelector('input[name="item"]:checked')?.value
-    if (!selected) return
-    await store.append({ item: selected }, { prefix: store.userId })
-    document.getElementById('status').textContent = `You claimed: ${selected}`
-  })
+  document.querySelector('#btnClaim')?.addEventListener('click', async () => {
+    const selected = document.querySelector('input[name="item"]:checked')?.value;
+    if (!selected) return;
+    await store.append({ item: selected }, { prefix: store.userId });
+    document.querySelector('#status').textContent = `You claimed: ${selected}`;
+  });
 }
 
-main().catch(e => {
-  document.getElementById('app').innerHTML = `<p style="color:red">Error: ${esc(e.message)}</p>`
-  console.error(e)
-})
+async function main() {
+  const result = await GoogleDriveStore.init({
+    clientId: CLIENT_ID,
+    clientSecret: CLIENT_SECRET,
+    mode,
+  });
+  if (!result) return; // redirecting to Google
+  if (result.status === 'onboarding') {
+    renderOnboardingGate(null, result);
+    return;
+  }
+  const store = result;
+
+  await (mode === 'participant' ? renderParticipant(store) : renderOrganizer(store));
+}
+
+try {
+  await main();
+} catch (error) {
+  document.querySelector('#app').innerHTML = `<p style="color:red">Error: ${esc(error.message)}</p>`;
+  // eslint-disable-next-line no-console
+  console.error(error);
+}

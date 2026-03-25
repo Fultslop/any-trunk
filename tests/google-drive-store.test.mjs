@@ -61,7 +61,7 @@ test('userId returns userEmail', () => {
 test('setSpace persists folderId to sessionStorage', () => {
   const store = new GoogleDriveStore({ clientId: 'id', token: 'tok' })
   store.setSpace('folder-xyz')
-  expect(store._spaceId).toBe('folder-xyz')
+  expect(store.spaceId).toBe('folder-xyz')
   expect(sessionStorage.getItem('gd:folderId')).toBe('folder-xyz')
 })
 
@@ -69,7 +69,7 @@ test('setSpace(null) removes folderId from sessionStorage', () => {
   sessionStorage.setItem('gd:folderId', 'old-folder')
   const store = new GoogleDriveStore({ clientId: 'id', token: 'tok' })
   store.setSpace(null)
-  expect(store._spaceId).toBeNull()
+  expect(store.spaceId).toBeNull()
   expect(sessionStorage.getItem('gd:folderId')).toBeNull()
 })
 
@@ -172,7 +172,7 @@ test('createSpace creates folder, writes _event.json, returns folderId', async (
 
   const spaceId = await store.createSpace('my-event', { accessMode: 'email' })
   expect(spaceId).toBe('folder-abc')
-  expect(store._spaceId).toBe('folder-abc')
+  expect(store.spaceId).toBe('folder-abc')
   expect(sessionStorage.getItem('gd:folderId')).toBe('folder-abc')
   expect(new GoogleDriveStore({}).getRecentSpaces()).toContain('folder-abc')
 })
@@ -211,7 +211,7 @@ test('join sets folderId, fetches _event.json, saves to sessionStorage', async (
   })
 
   await store.join('folder-abc')
-  expect(store._spaceId).toBe('folder-abc')
+  expect(store.spaceId).toBe('folder-abc')
   expect(sessionStorage.getItem('gd:folderId')).toBe('folder-abc')
   expect(new GoogleDriveStore({}).getRecentSpaces()).toContain('folder-abc')
 })
@@ -226,7 +226,7 @@ test('join throws when folder is inaccessible', async () => {
 
 test('read returns null for missing file', async () => {
   const store = makeStore()
-  store._spaceId = 'folder-abc'
+  store.spaceId = 'folder-abc'
   mockFetch(() => ({ status: 200, body: { files: [] } }))
   const result = await store.read('_event.json')
   expect(result).toBeNull()
@@ -234,7 +234,7 @@ test('read returns null for missing file', async () => {
 
 test('read resolves root file and returns parsed JSON', async () => {
   const store = makeStore()
-  store._spaceId = 'folder-abc'
+  store.spaceId = 'folder-abc'
   mockFetch((url) => {
     if (url.includes('drive/v3/files') && !url.includes('alt=media'))
       return { status: 200, body: { files: [{ id: 'file-123', name: '_event.json' }] } }
@@ -248,7 +248,7 @@ test('read resolves root file and returns parsed JSON', async () => {
 
 test('read resolves subfolder file', async () => {
   const store = makeStore()
-  store._spaceId = 'folder-root'
+  store.spaceId = 'folder-root'
   mockFetch((url) => {
     // Find the subfolder
     if (url.includes('alice%40gmail.com') || url.includes("name='alice@gmail.com'"))
@@ -269,7 +269,7 @@ test('read resolves subfolder file', async () => {
 
 test('append creates timestamped file in participant subfolder', async () => {
   const store = makeStore()
-  store._spaceId = 'folder-abc'
+  store.spaceId = 'folder-abc'
   const createdFiles = []
   mockFetch((url, opts) => {
     const body = opts?.body
@@ -299,7 +299,7 @@ test('append creates timestamped file in participant subfolder', async () => {
 
 test('readAll returns participant entries sorted by username', async () => {
   const store = makeStore()
-  store._spaceId = 'folder-root'
+  store.spaceId = 'folder-root'
 
   mockFetch((url) => {
     // List subfolders of root — match by folderId in the query string
@@ -331,7 +331,7 @@ test('readAll returns participant entries sorted by username', async () => {
 
 test('readAll skips _ prefixed folders', async () => {
   const store = makeStore()
-  store._spaceId = 'folder-root'
+  store.spaceId = 'folder-root'
   mockFetch((url) => {
     if (url.includes('folder-root') && url.includes('google-apps.folder'))
       return { status: 200, body: { files: [
@@ -351,7 +351,7 @@ test('readAll skips _ prefixed folders', async () => {
 
 test('write updates existing file', async () => {
   const store = makeStore()
-  store._spaceId = 'folder-abc'
+  store.spaceId = 'folder-abc'
   let patchedId = null
   mockFetch((url, opts) => {
     if (url.includes('drive/v3/files') && !url.includes('upload'))
@@ -368,7 +368,7 @@ test('write updates existing file', async () => {
 
 test('write creates file if not found', async () => {
   const store = makeStore()
-  store._spaceId = 'folder-abc'
+  store.spaceId = 'folder-abc'
   let created = false
   mockFetch((url, opts) => {
     if (!url.includes('upload')) return { status: 200, body: { files: [] } }
@@ -383,7 +383,7 @@ test('write creates file if not found', async () => {
 
 test('addCollaborator adds email as editor in email mode', async () => {
   const store = makeStore()
-  store._spaceId = 'folder-abc'
+  store.spaceId = 'folder-abc'
   let permBody = null
   mockFetch((url, opts) => {
     // read _event.json to determine accessMode
@@ -403,7 +403,7 @@ test('addCollaborator adds email as editor in email mode', async () => {
 
 test('addCollaborator throws in link mode', async () => {
   const store = makeStore()
-  store._spaceId = 'folder-abc'
+  store.spaceId = 'folder-abc'
   mockFetch((url) => {
     if (url.includes('drive/v3/files') && !url.includes('alt=media'))
       return { status: 200, body: { files: [{ id: 'evt', name: '_event.json' }] } }
@@ -419,7 +419,7 @@ test('addCollaborator throws in link mode', async () => {
 
 test('closeSubmissions writes closed:true to _event.json', async () => {
   const store = makeStore()
-  store._spaceId = 'folder-abc'
+  store.spaceId = 'folder-abc'
   let writtenData = null
   mockFetch((url, opts) => {
     if (url.includes('drive/v3/files') && !url.includes('upload') && !url.includes('alt=media'))
@@ -441,7 +441,7 @@ test('closeSubmissions writes closed:true to _event.json', async () => {
 
 test('archiveSpace downgrades all non-owner permissions to reader', async () => {
   const store = makeStore()
-  store._spaceId = 'folder-abc'
+  store.spaceId = 'folder-abc'
   const patched = []
   mockFetch((url, opts) => {
     if (opts?.method === 'GET' && url.includes('permissions'))
@@ -465,7 +465,7 @@ test('archiveSpace downgrades all non-owner permissions to reader', async () => 
 
 test('deleteSpace deletes folder and clears state', async () => {
   const store = makeStore()
-  store._spaceId = 'folder-abc'
+  store.spaceId = 'folder-abc'
   sessionStorage.setItem('gd:folderId', 'folder-abc')
   let deleted = false
   mockFetch((url, opts) => {
@@ -474,7 +474,7 @@ test('deleteSpace deletes folder and clears state', async () => {
   })
   await store.deleteSpace()
   expect(deleted).toBe(true)
-  expect(store._spaceId).toBeNull()
+  expect(store.spaceId).toBeNull()
   expect(sessionStorage.getItem('gd:folderId')).toBeNull()
 })
 
@@ -560,7 +560,7 @@ test('findOrCreateSpace sets spaceId and returns folder ID when folder exists', 
   })
   const id = await store.findOrCreateSpace('anytrunk-hunt')
   expect(id).toBe('folder-abc')
-  expect(store._spaceId).toBe('folder-abc')
+  expect(store.spaceId).toBe('folder-abc')
 })
 
 test('findOrCreateSpace creates folder and returns its ID when not found', async () => {
@@ -578,5 +578,5 @@ test('findOrCreateSpace creates folder and returns its ID when not found', async
   })
   const id = await store.findOrCreateSpace('anytrunk-hunt')
   expect(id).toBe('new-folder-id')
-  expect(store._spaceId).toBe('new-folder-id')
+  expect(store.spaceId).toBe('new-folder-id')
 })

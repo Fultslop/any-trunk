@@ -4,51 +4,51 @@ import { BaseStore } from '../lib/base-store.js'
 
 beforeEach(() => reset())
 
-// ── _storageKey safety ────────────────────────────────────────────────────
+// ── storageKey safety ─────────────────────────────────────────────────────
 
 test('_storageKey throws if subclass does not declare it', () => {
   class BrokenStore extends BaseStore {}
-  expect(() => BrokenStore._storageKey).toThrow(/BrokenStore must declare static _storageKey/)
+  expect(() => BrokenStore.storageKey).toThrow(/BrokenStore must declare static storageKey/)
 })
 
 test('_storageKey works when subclass declares it', () => {
-  class GoodStore extends BaseStore { static _storageKey = 'gs' }
-  expect(GoodStore._storageKey).toBe('gs')
+  class GoodStore extends BaseStore { static storageKey = 'gs' }
+  expect(GoodStore.storageKey).toBe('gs')
 })
 
 // ── setSpace ─────────────────────────────────────────────────────────────
 
 test('setSpace sets _spaceId on the instance', () => {
-  class S extends BaseStore { static _storageKey = 'ts' }
+  class S extends BaseStore { static storageKey = 'ts' }
   const store = new S()
-  expect(store._spaceId).toBeNull()
+  expect(store.spaceId).toBeNull()
   store.setSpace('abc-123')
-  expect(store._spaceId).toBe('abc-123')
+  expect(store.spaceId).toBe('abc-123')
 })
 
 // ── saveRecentSpace / getRecentSpaces ─────────────────────────────────────
 
 test('saveRecentSpace persists under storageKey namespace', () => {
-  class S extends BaseStore { static _storageKey = 'ts' }
+  class S extends BaseStore { static storageKey = 'ts' }
   S.saveRecentSpace('space-1')
   expect(localStorage.getItem('ts:recentSpaces')).toBe('["space-1"]')
 })
 
 test('getRecentSpaces reads from storageKey namespace', () => {
-  class S extends BaseStore { static _storageKey = 'ts' }
+  class S extends BaseStore { static storageKey = 'ts' }
   S.saveRecentSpace('space-1')
   const store = new S()
   expect(store.getRecentSpaces()).toEqual(['space-1'])
 })
 
 test('saveRecentSpace deduplicates and caps at 5', () => {
-  class S extends BaseStore { static _storageKey = 'ts' }
+  class S extends BaseStore { static storageKey = 'ts' }
   for (let i = 0; i < 7; i++) S.saveRecentSpace(`space-${i}`)
   expect(new S().getRecentSpaces()).toHaveLength(5)
 })
 
 test('saveRecentSpace moves existing entry to front', () => {
-  class S extends BaseStore { static _storageKey = 'ts' }
+  class S extends BaseStore { static storageKey = 'ts' }
   S.saveRecentSpace('a')
   S.saveRecentSpace('b')
   S.saveRecentSpace('a')
@@ -59,8 +59,8 @@ test('saveRecentSpace moves existing entry to front', () => {
 })
 
 test('two subclasses with different _storageKey have separate lists', () => {
-  class A extends BaseStore { static _storageKey = 'aa' }
-  class B extends BaseStore { static _storageKey = 'bb' }
+  class A extends BaseStore { static storageKey = 'aa' }
+  class B extends BaseStore { static storageKey = 'bb' }
   A.saveRecentSpace('space-a')
   B.saveRecentSpace('space-b')
   expect(new A().getRecentSpaces()).toEqual(['space-a'])
@@ -70,22 +70,22 @@ test('two subclasses with different _storageKey have separate lists', () => {
 // ── stubs throw ───────────────────────────────────────────────────────────
 
 test('init stub throws not implemented', async () => {
-  class S extends BaseStore { static _storageKey = 'ts' }
+  class S extends BaseStore { static storageKey = 'ts' }
   await expect(S.init({})).rejects.toThrow(/not implemented/)
 })
 
 test('getOnboardingUrl stub throws not implemented', () => {
-  class S extends BaseStore { static _storageKey = 'ts' }
+  class S extends BaseStore { static storageKey = 'ts' }
   expect(() => S.getOnboardingUrl()).toThrow(/not implemented/)
 })
 
 test('getOnboardingHint stub throws not implemented', () => {
-  class S extends BaseStore { static _storageKey = 'ts' }
+  class S extends BaseStore { static storageKey = 'ts' }
   expect(() => S.getOnboardingHint()).toThrow(/not implemented/)
 })
 
 test('instance method stubs throw not implemented', async () => {
-  class S extends BaseStore { static _storageKey = 'ts' }
+  class S extends BaseStore { static storageKey = 'ts' }
   const store = new S()
   await expect(store.read('x.json')).rejects.toThrow(/not implemented/)
   await expect(store.readAll()).rejects.toThrow(/not implemented/)
@@ -100,7 +100,7 @@ test('instance method stubs throw not implemented', async () => {
 })
 
 test('userId stub throws not implemented', () => {
-  class S extends BaseStore { static _storageKey = 'ts' }
+  class S extends BaseStore { static storageKey = 'ts' }
   const store = new S()
   expect(() => store.userId).toThrow(/not implemented/)
 })

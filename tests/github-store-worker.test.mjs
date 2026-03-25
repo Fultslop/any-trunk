@@ -65,7 +65,7 @@ test('completeAuth POSTs to workerUrl/oauth/token (not cors-anywhere)', async ()
   expect(store).toBeInstanceOf(WorkerGitHubStore)  // not a plain GitHubStore
   expect(store.isAuthenticated).toBe(true)
   expect(store.userId).toBe('alice')
-  expect(store._workerUrl).toBe('https://worker.example.com')
+  expect(store.workerUrl).toBe('https://worker.example.com')
   expect(sessionStorage.getItem('gh:token')).toBe('gho_testtoken')
 })
 

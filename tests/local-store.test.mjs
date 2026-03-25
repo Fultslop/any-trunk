@@ -39,7 +39,7 @@ test('getCapabilities() returns expected shape', async () => {
 // ── static members ────────────────────────────────────────────────────────
 
 test('_storageKey is "local"', () => {
-  expect(LocalStore._storageKey).toBe('local')
+  expect(LocalStore.storageKey).toBe('local')
 })
 
 // Note: getOnboardingUrl() and getOnboardingHint() call navigator.platform which
@@ -67,7 +67,7 @@ test('createSpace sets _spaceId', async () => {
   const root = createMockFilesystem()
   const store = await LocalStore.init({}, { _rootHandle: root })
   await store.createSpace('my-hunt')
-  expect(store._spaceId).toBe('my-hunt')
+  expect(store.spaceId).toBe('my-hunt')
 })
 
 // ── findOrCreateSpace() ───────────────────────────────────────────────────
@@ -79,7 +79,7 @@ test('findOrCreateSpace returns existing directory name and sets _spaceId', asyn
   const store = await LocalStore.init({}, { _rootHandle: root })
   const id = await store.findOrCreateSpace('existing-hunt')
   expect(id).toBe('existing-hunt')
-  expect(store._spaceId).toBe('existing-hunt')
+  expect(store.spaceId).toBe('existing-hunt')
 })
 
 test('findOrCreateSpace creates directory when not found', async () => {
@@ -87,7 +87,7 @@ test('findOrCreateSpace creates directory when not found', async () => {
   const store = await LocalStore.init({}, { _rootHandle: root })
   const id = await store.findOrCreateSpace('new-hunt')
   expect(id).toBe('new-hunt')
-  expect(store._spaceId).toBe('new-hunt')
+  expect(store.spaceId).toBe('new-hunt')
   const dir = await root.getDirectoryHandle('new-hunt')
   expect(dir.kind).toBe('directory')
 })
@@ -99,7 +99,7 @@ test('deleteSpace removes the space directory and clears _spaceId', async () => 
   const store = await LocalStore.init({}, { _rootHandle: root })
   await store.createSpace('doomed')
   await store.deleteSpace()
-  expect(store._spaceId).toBeNull()
+  expect(store.spaceId).toBeNull()
   await expect(root.getDirectoryHandle('doomed', { create: false })).rejects.toMatchObject({ name: 'NotFoundError' })
 })
 
@@ -233,7 +233,7 @@ test('join sets _spaceId to the given spaceId', async () => {
   const root  = createMockFilesystem()
   const store = await LocalStore.init({}, { _rootHandle: root })
   await store.join('hunt-abc123')
-  expect(store._spaceId).toBe('hunt-abc123')
+  expect(store.spaceId).toBe('hunt-abc123')
 })
 
 test('join resolves without error', async () => {

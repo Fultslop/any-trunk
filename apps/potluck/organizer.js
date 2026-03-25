@@ -1,57 +1,13 @@
-import { esc, setStatus, startPolling } from './helpers.js'
+import { esc, setStatus, startPolling } from './helpers.js';
 
-export async function renderOrganizer(store, repoParam) {
-  const app = document.getElementById('app')
-
-  if (store._spaceId) {
-    await renderOrganizerDashboard(store, repoParam)
-    return
-  }
-
-  const recent = store.getRecentSpaces()
-  app.innerHTML = `
-    <h1>Potluck Organizer</h1>
-    <p class="sub">Signed in as <strong>${esc(store.userId)}</strong></p>
-
-    <div class="section">
-      <strong>Create new event</strong>
-      <label>Event name
-        <input id="event-name" type="text"
-          value="potluck-${new Date().toISOString().slice(0,10)}" />
-      </label>
-      <button id="create-btn">Create</button>
-    </div>
-
-    ${recent.length ? `
-    <hr>
-    <div class="section">
-      <strong>Resume recent event</strong>
-      <ul style="margin:0.5rem 0;padding-left:1.2rem">
-        ${recent.map(r => `<li><a href="?mode=organizer&repo=${encodeURIComponent(r)}">${esc(r)}</a></li>`).join('')}
-      </ul>
-    </div>` : ''}
-    <div id="status"></div>
-  `
-
-  document.getElementById('create-btn').onclick = async () => {
-    const name = document.getElementById('event-name').value.trim()
-    if (!name) { setStatus('Event name required'); return }
-    setStatus('Creating...', false)
-    try {
-      await store.createSpace(name)
-      await renderOrganizerDashboard(store, repoParam)
-    } catch(e) { setStatus(e.message) }
-  }
-}
-
-export async function renderOrganizerDashboard(store, repoParam) {
-  const app = document.getElementById('app')
+export async function renderOrganizerDashboard(store) {
+  const app = document.querySelector('#app');
 
   app.innerHTML = `
     <h1>Potluck Organizer</h1>
     <p class="sub">
       Signed in as <strong>${esc(store.userId)}</strong> &nbsp;·&nbsp;
-      <strong>${esc(store._spaceId)}</strong>
+      <strong>${esc(store.spaceId)}</strong>
     </p>
 
     <div class="section">
@@ -117,179 +73,223 @@ export async function renderOrganizerDashboard(store, repoParam) {
         <button id="delete-cancel-btn" style="margin-top:0.5rem;margin-left:0.5rem">Cancel</button>
       </div>
     </div>
-  `
+  `;
 
-  const repoName         = store._spaceId?.split('/')[1] ?? ''
-  const suggestedName    = `${repoName}-invite`
-  const joinBase         = `${location.origin}${location.pathname}?mode=participant&repo=${store._spaceId}`
-  const patInput         = document.getElementById('pat-input')
-  const validateBtn      = document.getElementById('validate-btn')
-  const validateStatus   = document.getElementById('validate-status')
-  const inviteSection    = document.getElementById('invite-link-section')
-  const copyBtn          = document.getElementById('copy-btn')
-  const preview          = document.getElementById('link-preview')
+  const repoName = store.spaceId?.split('/')[1] ?? '';
+  const suggestedName = `${repoName}-invite`;
+  const joinBase = `${location.origin}${location.pathname}?mode=participant&repo=${store.spaceId}`;
+  const patInput = document.querySelector('#pat-input');
+  const validateButton = document.querySelector('#validate-btn');
+  const validateStatus = document.querySelector('#validate-status');
+  const inviteSection = document.querySelector('#invite-link-section');
+  const copyButton = document.querySelector('#copy-btn');
+  const preview = document.querySelector('#link-preview');
 
-  document.getElementById('pat-name-hint').textContent = suggestedName
-  document.getElementById('repo-name-hint').textContent = store._spaceId ?? ''
-  document.getElementById('copy-name-btn').onclick = () => {
-    navigator.clipboard.writeText(suggestedName)
-    document.getElementById('copy-name-btn').textContent = 'Copied!'
-    setTimeout(() => { document.getElementById('copy-name-btn').textContent = 'Copy' }, 2000)
-  }
+  document.querySelector('#pat-name-hint').textContent = suggestedName;
+  document.querySelector('#repo-name-hint').textContent = store.spaceId ?? '';
+  document.querySelector('#copy-name-btn').addEventListener('click', () => {
+    navigator.clipboard.writeText(suggestedName);
+    document.querySelector('#copy-name-btn').textContent = 'Copied!';
+    setTimeout(() => { document.querySelector('#copy-name-btn').textContent = 'Copy'; }, 2000);
+  });
 
-  validateBtn.onclick = async () => {
-    const token = patInput.value.trim()
-    if (!token) { validateStatus.textContent = 'Paste a token first.'; return }
-    validateBtn.disabled = true
-    validateStatus.textContent = 'Validating...'
-    validateStatus.className = ''
+  validateButton.addEventListener('click', async () => {
+    const token = patInput.value.trim();
+    if (!token) { validateStatus.textContent = 'Paste a token first.'; return; }
+    validateButton.disabled = true;
+    validateStatus.textContent = 'Validating...';
+    validateStatus.className = '';
     try {
-      const resp = await fetch(`https://api.github.com/repos/${store._spaceId}`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
-      })
+      const resp = await fetch(`https://api.github.com/repos/${store.spaceId}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+      });
       if (resp.status === 401) {
-        validateStatus.textContent = 'Token is invalid or expired — re-generate it at step 1.'
-        validateStatus.className = 'err'
-        inviteSection.style.display = 'none'
-      } else if (!resp.ok) {
-        validateStatus.textContent = 'Token cannot access this repo — check steps 4 and 5.'
-        validateStatus.className = 'err'
-        inviteSection.style.display = 'none'
-      } else {
-        const data = await resp.json()
-        if (!data.permissions?.admin) {
-          validateStatus.textContent = 'Token cannot access this repo — check steps 4 and 5.'
-          validateStatus.className = 'err'
-          inviteSection.style.display = 'none'
+        validateStatus.textContent = 'Token is invalid or expired — re-generate it at step 1.';
+        validateStatus.className = 'err';
+        inviteSection.style.display = 'none';
+      } else if (resp.ok) {
+        const data = await resp.json();
+        if (data.permissions?.admin) {
+          validateStatus.textContent = 'Token valid ✓';
+          validateStatus.className = 'ok';
+          inviteSection.style.display = 'block';
+          const full = `${joinBase}&invite=${token}`;
+          preview.textContent = full.length > 70 ? `${full.slice(0, 70)}…` : full;
+          copyButton.addEventListener('click', () => {
+            navigator.clipboard.writeText(full);
+            copyButton.textContent = 'Copied!';
+            setTimeout(() => { copyButton.textContent = 'Copy join link'; }, 2000);
+          });
         } else {
-          validateStatus.textContent = 'Token valid ✓'
-          validateStatus.className = 'ok'
-          inviteSection.style.display = 'block'
-          const full = `${joinBase}&invite=${token}`
-          preview.textContent = full.length > 70 ? full.slice(0, 70) + '…' : full
-          copyBtn.onclick = () => {
-            navigator.clipboard.writeText(full)
-            copyBtn.textContent = 'Copied!'
-            setTimeout(() => { copyBtn.textContent = 'Copy join link' }, 2000)
-          }
+          validateStatus.textContent = 'Token cannot access this repo — check steps 4 and 5.';
+          validateStatus.className = 'err';
+          inviteSection.style.display = 'none';
         }
+      } else {
+        validateStatus.textContent = 'Token cannot access this repo — check steps 4 and 5.';
+        validateStatus.className = 'err';
+        inviteSection.style.display = 'none';
       }
-    } catch(e) {
-      validateStatus.textContent = `Validation error: ${esc(e.message)}`
-      validateStatus.className = 'err'
+    } catch (error) {
+      validateStatus.textContent = `Validation error: ${esc(error.message)}`;
+      validateStatus.className = 'err';
     } finally {
-      validateBtn.disabled = false
+      validateButton.disabled = false;
     }
-  }
+  });
 
   async function refreshTable() {
-    const el = document.getElementById('responses-table')
-    if (!el) return
+    const element = document.querySelector('#responses-table');
+    if (!element) return;
     try {
-      const participants = await store.readAll()
-      if (!participants.length) {
-        el.innerHTML = '<p style="color:#888;margin-top:0.5rem">No responses yet.</p>'
-        return
+      const participants = await store.readAll();
+      if (participants.length === 0) {
+        element.innerHTML = '<p style="color:#888;margin-top:0.5rem">No responses yet.</p>';
+        return;
       }
-      el.innerHTML = `<table>
+      element.innerHTML = `<table>
         <thead><tr><th>Participant</th><th>Dish</th><th>Note</th><th>Time</th></tr></thead>
         <tbody>
-          ${participants.map(p => {
-            const last = p.entries[p.entries.length - 1]
-            const time = last
-              ? new Date((last.path.split('/').pop() ?? '').replace('.json','')
-                  .replace(/T(\d{2})-(\d{2})-(\d{2})/, 'T$1:$2:$3'))
-                .toLocaleTimeString()
-              : '—'
-            return `<tr>
+          ${participants.map((p) => {
+    const last = p.entries.at(-1);
+    const time = last
+      ? new Date((last.path.split('/').pop() ?? '').replace('.json', '')
+        .replace(/T(\d{2})-(\d{2})-(\d{2})/, 'T$1:$2:$3'))
+        .toLocaleTimeString()
+      : '—';
+    return `<tr>
               <td>${esc(p.username)}</td>
               <td>${esc(p.latest?.dish ?? '—')}</td>
               <td>${esc(p.latest?.note ?? '')}</td>
               <td>${time}</td>
-            </tr>`
-          }).join('')}
+            </tr>`;
+  }).join('')}
         </tbody>
-      </table>`
-    } catch(e) {
-      const el2 = document.getElementById('responses-table')
-      if (el2) el2.innerHTML = `<p class="err">Error: ${e.message}</p>`
+      </table>`;
+    } catch (error) {
+      const element2 = document.querySelector('#responses-table');
+      if (element2) element2.innerHTML = `<p class="err">Error: ${error.message}</p>`;
     }
   }
 
-  await refreshTable()
-  startPolling(refreshTable, 30_000)
+  await refreshTable();
+  startPolling(refreshTable, 30_000);
 
-  const closeBtn         = document.getElementById('close-btn')
-  const lockBtn          = document.getElementById('lock-btn')
-  const deleteBtn        = document.getElementById('delete-btn')
-  const deleteConfirm    = document.getElementById('delete-confirm')
-  const deleteRepoHint   = document.getElementById('delete-repo-hint')
-  const deleteNameInput  = document.getElementById('delete-name-input')
-  const deleteConfirmBtn = document.getElementById('delete-confirm-btn')
-  const deleteCancelBtn  = document.getElementById('delete-cancel-btn')
-  const repoShortName    = store._spaceId?.split('/')[1] ?? store._spaceId
+  const closeButton = document.querySelector('#close-btn');
+  const lockButton = document.querySelector('#lock-btn');
+  const deleteButton = document.querySelector('#delete-btn');
+  const deleteConfirm = document.querySelector('#delete-confirm');
+  const deleteRepoHint = document.querySelector('#delete-repo-hint');
+  const deleteNameInput = document.querySelector('#delete-name-input');
+  const deleteConfirmButton = document.querySelector('#delete-confirm-btn');
+  const deleteCancelButton = document.querySelector('#delete-cancel-btn');
+  const repoShortName = store.spaceId?.split('/')[1] ?? store.spaceId;
 
-  closeBtn.onclick = async () => {
-    closeBtn.disabled = true
-    setStatus('Closing submissions...', false)
+  closeButton.addEventListener('click', async () => {
+    closeButton.disabled = true;
+    setStatus('Closing submissions...', false);
     try {
-      await store.closeSubmissions()
-      closeBtn.textContent = 'Submissions closed ✓'
-      setStatus('', false)
-      lockBtn.style.display = 'inline'
-    } catch(e) {
-      setStatus(e.message)
-      closeBtn.disabled = false
+      await store.closeSubmissions();
+      closeButton.textContent = 'Submissions closed ✓';
+      setStatus('', false);
+      lockButton.style.display = 'inline';
+    } catch (error) {
+      setStatus(error.message);
+      closeButton.disabled = false;
     }
-  }
+  });
 
-  lockBtn.onclick = async () => {
-    if (!confirm('This will archive the event on GitHub, making it permanently read-only. You will not be able to reopen submissions. Continue?')) return
-    lockBtn.disabled = true
-    setStatus('Locking event...', false)
+  lockButton.addEventListener('click', async () => {
+    if (!confirm('This will archive the event on GitHub, making it permanently read-only. You will not be able to reopen submissions. Continue?')) return;
+    lockButton.disabled = true;
+    setStatus('Locking event...', false);
     try {
-      await store.archiveSpace()
-      lockBtn.textContent = 'Event locked ✓'
-      setStatus('', false)
-      deleteBtn.style.display = 'inline'
-    } catch(e) {
-      setStatus(e.message)
-      lockBtn.disabled = false
+      await store.archiveSpace();
+      lockButton.textContent = 'Event locked ✓';
+      setStatus('', false);
+      deleteButton.style.display = 'inline';
+    } catch (error) {
+      setStatus(error.message);
+      lockButton.disabled = false;
     }
-  }
+  });
 
-  deleteBtn.onclick = () => {
-    deleteRepoHint.textContent = repoShortName
-    deleteConfirm.style.display = 'block'
-    deleteBtn.style.display = 'none'
-  }
+  deleteButton.addEventListener('click', () => {
+    deleteRepoHint.textContent = repoShortName;
+    deleteConfirm.style.display = 'block';
+    deleteButton.style.display = 'none';
+  });
 
-  deleteCancelBtn.onclick = () => {
-    deleteConfirm.style.display = 'none'
-    deleteBtn.style.display = 'inline'
-    deleteNameInput.value = ''
-    deleteConfirmBtn.disabled = true
-  }
+  deleteCancelButton.addEventListener('click', () => {
+    deleteConfirm.style.display = 'none';
+    deleteButton.style.display = 'inline';
+    deleteNameInput.value = '';
+    deleteConfirmButton.disabled = true;
+  });
 
   deleteNameInput.addEventListener('input', () => {
-    deleteConfirmBtn.disabled = deleteNameInput.value.trim() !== repoShortName
-  })
+    deleteConfirmButton.disabled = deleteNameInput.value.trim() !== repoShortName;
+  });
 
-  deleteConfirmBtn.onclick = async () => {
-    deleteConfirmBtn.disabled = true
-    setStatus('Deleting event...', false)
+  deleteConfirmButton.addEventListener('click', async () => {
+    deleteConfirmButton.disabled = true;
+    setStatus('Deleting event...', false);
     try {
-      await store.deleteSpace()
-      const key = `${store.constructor._storageKey}:recentSpaces`
-      const repos = store.getRecentSpaces()
-      localStorage.setItem(key, JSON.stringify(repos.filter(r => r !== store._spaceId)))
-      location.href = `${location.pathname}?mode=organizer`
-    } catch(e) {
-      setStatus(e.message)
-      deleteNameInput.value = ''
-      deleteConfirmBtn.disabled = true
-      deleteConfirm.style.display = 'none'
-      deleteBtn.style.display = 'inline'
+      await store.deleteSpace();
+      const key = `${store.constructor.storageKey}:recentSpaces`;
+      const repos = store.getRecentSpaces();
+      localStorage.setItem(key, JSON.stringify(repos.filter((r) => r !== store.spaceId)));
+      location.href = `${location.pathname}?mode=organizer`;
+    } catch (error) {
+      setStatus(error.message);
+      deleteNameInput.value = '';
+      deleteConfirmButton.disabled = true;
+      deleteConfirm.style.display = 'none';
+      deleteButton.style.display = 'inline';
     }
+  });
+}
+
+export async function renderOrganizer(store) {
+  const app = document.querySelector('#app');
+
+  if (store.spaceId) {
+    await renderOrganizerDashboard(store);
+    return;
   }
+
+  const recent = store.getRecentSpaces();
+  app.innerHTML = `
+    <h1>Potluck Organizer</h1>
+    <p class="sub">Signed in as <strong>${esc(store.userId)}</strong></p>
+
+    <div class="section">
+      <strong>Create new event</strong>
+      <label>Event name
+        <input id="event-name" type="text"
+          value="potluck-${new Date().toISOString().slice(0, 10)}" />
+      </label>
+      <button id="create-btn">Create</button>
+    </div>
+
+    ${recent.length > 0 ? `
+    <hr>
+    <div class="section">
+      <strong>Resume recent event</strong>
+      <ul style="margin:0.5rem 0;padding-left:1.2rem">
+        ${recent.map((r) => `<li><a href="?mode=organizer&repo=${encodeURIComponent(r)}">${esc(r)}</a></li>`).join('')}
+      </ul>
+    </div>` : ''}
+    <div id="status"></div>
+  `;
+
+  document.querySelector('#create-btn').addEventListener('click', async () => {
+    const name = document.querySelector('#event-name').value.trim();
+    if (!name) { setStatus('Event name required'); return; }
+    setStatus('Creating...', false);
+    try {
+      await store.createSpace(name);
+      await renderOrganizerDashboard(store);
+    } catch (error) { setStatus(error.message); }
+  });
 }

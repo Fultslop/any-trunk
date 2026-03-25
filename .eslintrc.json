@@ -1,0 +1,26 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "node": true
+  },
+  "extends": [
+    "airbnb-base",
+    "plugin:unicorn/recommended"
+  ],
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "module"
+  },
+  "rules": {
+    "no-console": "warn",
+    "unicorn/filename-case": "error",
+    "unicorn/no-null": "off",
+    "no-restricted-globals": "off",
+    "camelcase": "off",
+    "class-methods-use-this": "off",
+    "no-restricted-syntax": "off",
+    "import/prefer-default-export": "off",
+    "import/extensions": ["error", "ignorePackages", { "js": "always" }]
+  }
+}

@@ -1,71 +1,96 @@
 // apps/hunt/views/hunt-editor.js
-import { renderForm } from '../lib/forms.js'
-import { createPoller } from '../lib/poller.js'
-import { uniqueSlug } from '../lib/slug.js'
+import { renderForm } from '../lib/forms.js';
+import { createPoller } from '../lib/poller.js';
 
 function serviceIconHtml(service, size = 'w-4 h-4') {
   return service.faviconUrl
     ? `<img src="${service.faviconUrl}" class="${size} inline-block align-middle flex-shrink-0" alt="${service.label}">`
-    : `<span>${service.icon}</span>`
+    : `<span>${service.icon}</span>`;
 }
 
 function locationHtml(service, store, huntSpaceId) {
   if (service.id === 'github') {
-    const url = `https://github.com/${huntSpaceId}`
+    const url = `https://github.com/${huntSpaceId}`;
     return `<a href="${url}" target="_blank" rel="noopener"
-      class="text-violet-600 hover:underline truncate">${huntSpaceId}</a>`
+      class="text-violet-600 hover:underline truncate">${huntSpaceId}</a>`;
   }
   if (service.id === 'google-drive') {
-    const url = `https://drive.google.com/drive/folders/${huntSpaceId}`
+    const url = `https://drive.google.com/drive/folders/${huntSpaceId}`;
     return `<a href="${url}" target="_blank" rel="noopener"
-      class="text-violet-600 hover:underline truncate">Google Drive folder</a>`
+      class="text-violet-600 hover:underline truncate">Google Drive folder</a>`;
   }
   // local — browsers don't expose full paths
-  const displayPath = `${store.userId}/${huntSpaceId}`
+  const displayPath = `${store.userId}/${huntSpaceId}`;
   return `<span class="truncate">${displayPath}</span>
     <button id="copy-path" title="Copy path"
-      class="ml-1 text-gray-400 hover:text-gray-600 flex-shrink-0">⎘</button>`
+      class="ml-1 text-gray-400 hover:text-gray-600 flex-shrink-0">⎘</button>`;
 }
 
 export async function renderHuntEditor(container, state, navigate) {
-  const { store, service, schema, registrySpaceId, huntSpaceId, huntName } = state
-  await store.setSpace(huntSpaceId)
+  const {
+    store, service, schema, huntSpaceId, huntName,
+  } = state;
+  await store.setSpace(huntSpaceId);
 
-  let huntData         = {}
-  let locationSlugs    = []
-  let locationDataMap  = {}
-  let detailsExpanded  = false
-  let detailsFormData  = {}
-  let poller
+  let huntData = {};
+  let locationSlugs = [];
+  let locationDataMap = {};
+  let detailsExpanded = false;
+  let detailsFormData = {};
+  let poller;
 
   async function loadData() {
-    huntData      = await store.read('_hunt.json') ?? {}
-    locationSlugs = await store.read('_locations.json') ?? []
+    huntData = await store.read('_hunt.json') ?? {};
+    locationSlugs = await store.read('_locations.json') ?? [];
     const entries = await Promise.all(
-      locationSlugs.map(async slug => [slug, await store.read(`locations/${slug}.json`) ?? {}])
-    )
-    locationDataMap = Object.fromEntries(entries)
+      locationSlugs.map(async (slug) => [slug, await store.read(`locations/${slug}.json`) ?? {}]),
+    );
+    locationDataMap = Object.fromEntries(entries);
   }
 
-  async function refresh() {
-    await store.setSpace(huntSpaceId)
-    await loadData()
-    renderLocations()
+  async function handleDeleteLocation(slug) {
+    if (!confirm('Delete this location?')) return;
+    await store.setSpace(huntSpaceId);
+    await store.delete(`locations/${slug}.json`);
+    const updated = (await store.read('_locations.json') ?? []).filter((s) => s !== slug);
+    await store.write('_locations.json', updated);
+    locationSlugs = updated;
+    delete locationDataMap[slug];
+    // eslint-disable-next-line no-use-before-define
+    renderLocations();
+  }
+
+  function handleEditClick(button) {
+    poller?.stop();
+    navigate('location-form', {
+      locationSlug: button.dataset.slug,
+      locationData: locationDataMap[button.dataset.slug] ?? {},
+      locationSlugs,
+      huntSpaceId,
+      huntName,
+    });
+  }
+
+  function bindLocationButtons() {
+    for (const button of container.querySelectorAll('.edit-loc')) {
+      button.addEventListener('click', () => handleEditClick(button));
+    }
+
+    for (const button of container.querySelectorAll('.delete-loc')) {
+      button.addEventListener('click', () => handleDeleteLocation(button.dataset.slug));
+    }
   }
 
   function renderLocations() {
-    const list = container.querySelector('#locations-list')
-    if (!list) return
-    if (locationSlugs.length === 0) {
-      list.innerHTML = `<p class="text-gray-400 text-sm text-center py-3">No locations yet.</p>`
-    } else {
-      list.innerHTML = locationSlugs.map((slug, i) => {
-        const loc = locationDataMap[slug] ?? {}
-        return `
+    const list = container.querySelector('#locations-list');
+    if (!list) return;
+    list.innerHTML = locationSlugs.length === 0 ? '<p class="text-gray-400 text-sm text-center py-3">No locations yet.</p>' : locationSlugs.map((slug, index) => {
+      const loc = locationDataMap[slug] ?? {};
+      return `
           <div class="border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between bg-white">
             <div>
-              <div class="font-medium text-sm">${i + 1} · ${loc.name ?? slug}</div>
-              <div class="text-xs text-gray-400">${loc.points ?? 0} pts${loc.badge ? ' · ' + loc.badge : ''}</div>
+              <div class="font-medium text-sm">${index + 1} · ${loc.name ?? slug}</div>
+              <div class="text-xs text-gray-400">${loc.points ?? 0} pts${loc.badge ? ` · ${loc.badge}` : ''}</div>
             </div>
             <div class="flex gap-3 ml-4">
               <button data-slug="${slug}"
@@ -73,53 +98,30 @@ export async function renderHuntEditor(container, state, navigate) {
               <button data-slug="${slug}"
                 class="delete-loc text-xs text-red-500 hover:text-red-700">delete</button>
             </div>
-          </div>`
-      }).join('')
-    }
-    bindLocationButtons()
+          </div>`;
+    }).join('');
+    bindLocationButtons();
   }
 
-  function bindLocationButtons() {
-    container.querySelectorAll('.edit-loc').forEach(btn =>
-      btn.addEventListener('click', () => {
-        poller?.stop()
-        navigate('location-form', {
-          locationSlug: btn.dataset.slug,
-          locationData: locationDataMap[btn.dataset.slug] ?? {},
-          locationSlugs,
-          huntSpaceId,
-          huntName,
-        })
-      })
-    )
-    container.querySelectorAll('.delete-loc').forEach(btn =>
-      btn.addEventListener('click', () => handleDeleteLocation(btn.dataset.slug))
-    )
-  }
-
-  async function handleDeleteLocation(slug) {
-    if (!confirm(`Delete this location?`)) return
-    await store.setSpace(huntSpaceId)
-    await store.delete(`locations/${slug}.json`)
-    const updated = (await store.read('_locations.json') ?? []).filter(s => s !== slug)
-    await store.write('_locations.json', updated)
-    locationSlugs   = updated
-    delete locationDataMap[slug]
-    renderLocations()
+  async function refresh() {
+    await store.setSpace(huntSpaceId);
+    await loadData();
+    renderLocations();
   }
 
   async function handleSaveDetails() {
-    await store.setSpace(huntSpaceId)
-    await store.write('_hunt.json', detailsFormData)
-    huntData = { ...detailsFormData }
-    detailsExpanded = false
-    renderDetails()
+    await store.setSpace(huntSpaceId);
+    await store.write('_hunt.json', detailsFormData);
+    huntData = { ...detailsFormData };
+    detailsExpanded = false;
+    // eslint-disable-next-line no-use-before-define
+    renderDetails();
   }
 
   function renderDetails() {
-    const section = container.querySelector('#hunt-details-section')
-    if (!section) return
-    const summary = [huntData.name, huntData.country, huntData.flag].filter(Boolean).join(' · ')
+    const section = container.querySelector('#hunt-details-section');
+    if (!section) return;
+    const summary = [huntData.name, huntData.country, huntData.flag].filter(Boolean).join(' · ');
     section.innerHTML = `
       <div class="border border-gray-200 rounded-lg overflow-hidden mb-6">
         <button id="toggle-details"
@@ -140,34 +142,35 @@ export async function renderHuntEditor(container, state, navigate) {
                 class="px-3 py-2 text-sm text-gray-500 hover:text-gray-700">Cancel</button>
             </div>
           </div>` : ''}
-      </div>`
+      </div>`;
 
     section.querySelector('#toggle-details').addEventListener('click', () => {
-      detailsExpanded = !detailsExpanded
-      if (detailsExpanded) detailsFormData = { ...huntData }
-      renderDetails()
+      detailsExpanded = !detailsExpanded;
+      if (detailsExpanded) detailsFormData = { ...huntData };
+      renderDetails();
       if (detailsExpanded) {
         renderForm(
           section.querySelector('#details-form'),
           schema.hunt,
           detailsFormData,
-          data => { detailsFormData = data }
-        )
+          (data) => { detailsFormData = data; },
+        );
       }
-    })
+    });
 
     if (detailsExpanded) {
-      section.querySelector('#save-details').addEventListener('click', handleSaveDetails)
+      section.querySelector('#save-details').addEventListener('click', handleSaveDetails);
       section.querySelector('#cancel-details').addEventListener('click', () => {
-        detailsExpanded = false
-        renderDetails()
-      })
+        detailsExpanded = false;
+        renderDetails();
+      });
     }
   }
 
-  await loadData()
-  detailsFormData = { ...huntData }
+  await loadData();
+  detailsFormData = { ...huntData };
 
+  // eslint-disable-next-line no-param-reassign
   container.innerHTML = `
     <div class="mb-6">
       <button id="back-btn" class="text-sm text-gray-500 hover:text-gray-700">← Your hunts</button>
@@ -188,33 +191,33 @@ export async function renderHuntEditor(container, state, navigate) {
       class="mt-3 w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-gray-400">
       + Add location
     </button>
-    <div id="error-msg" class="mt-3 text-red-600 text-sm hidden"></div>`
+    <div id="error-msg" class="mt-3 text-red-600 text-sm hidden"></div>`;
 
-  renderDetails()
-  renderLocations()
+  renderDetails();
+  renderLocations();
 
   container.querySelector('#copy-path')?.addEventListener('click', () => {
-    navigator.clipboard.writeText(`${store.userId}/${huntSpaceId}`)
-  })
+    navigator.clipboard.writeText(`${store.userId}/${huntSpaceId}`);
+  });
 
   container.querySelector('#back-btn').addEventListener('click', () => {
-    poller?.stop()
-    navigate('space-list', { huntSpaceId: undefined, huntName: undefined })
-  })
+    poller?.stop();
+    navigate('space-list', { huntSpaceId: undefined, huntName: undefined });
+  });
 
-  container.querySelector('#refresh-btn').addEventListener('click', refresh)
+  container.querySelector('#refresh-btn').addEventListener('click', refresh);
 
   container.querySelector('#add-location').addEventListener('click', () => {
-    poller?.stop()
+    poller?.stop();
     navigate('location-form', {
       locationSlug: undefined,
       locationData: {},
       locationSlugs,
       huntSpaceId,
       huntName,
-    })
-  })
+    });
+  });
 
-  poller = createPoller(refresh, 20_000)
-  poller.start()
+  poller = createPoller(refresh, 20_000);
+  poller.start();
 }

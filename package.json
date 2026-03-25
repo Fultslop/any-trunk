@@ -11,6 +11,10 @@
     "cors-anywhere": "^0.4.4"
   },
   "devDependencies": {
+    "eslint": "^8.2.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.25.2",
+    "eslint-plugin-unicorn": "^51.0.1",
     "vitest": "^4.1.0"
   }
 }
