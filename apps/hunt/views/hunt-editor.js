@@ -3,8 +3,32 @@ import { renderForm } from '../lib/forms.js'
 import { createPoller } from '../lib/poller.js'
 import { uniqueSlug } from '../lib/slug.js'
 
+function serviceIconHtml(service, size = 'w-4 h-4') {
+  return service.faviconUrl
+    ? `<img src="${service.faviconUrl}" class="${size} inline-block align-middle flex-shrink-0" alt="${service.label}">`
+    : `<span>${service.icon}</span>`
+}
+
+function locationHtml(service, store, huntSpaceId) {
+  if (service.id === 'github') {
+    const url = `https://github.com/${huntSpaceId}`
+    return `<a href="${url}" target="_blank" rel="noopener"
+      class="text-violet-600 hover:underline truncate">${huntSpaceId}</a>`
+  }
+  if (service.id === 'google-drive') {
+    const url = `https://drive.google.com/drive/folders/${huntSpaceId}`
+    return `<a href="${url}" target="_blank" rel="noopener"
+      class="text-violet-600 hover:underline truncate">Google Drive folder</a>`
+  }
+  // local — browsers don't expose full paths
+  const displayPath = `${store.userId}/${huntSpaceId}`
+  return `<span class="truncate">${displayPath}</span>
+    <button id="copy-path" title="Copy path"
+      class="ml-1 text-gray-400 hover:text-gray-600 flex-shrink-0">⎘</button>`
+}
+
 export async function renderHuntEditor(container, state, navigate) {
-  const { store, schema, registrySpaceId, huntSpaceId, huntName } = state
+  const { store, service, schema, registrySpaceId, huntSpaceId, huntName } = state
   await store.setSpace(huntSpaceId)
 
   let huntData         = {}
@@ -149,6 +173,10 @@ export async function renderHuntEditor(container, state, navigate) {
       <button id="back-btn" class="text-sm text-gray-500 hover:text-gray-700">← Your hunts</button>
       <span class="text-sm text-gray-400 mx-1">·</span>
       <span class="text-sm font-semibold text-gray-700">${huntName}</span>
+      <div class="mt-1 flex items-center gap-1.5 text-xs text-gray-400 max-w-full overflow-hidden">
+        ${serviceIconHtml(service)}
+        ${locationHtml(service, store, huntSpaceId)}
+      </div>
     </div>
     <div id="hunt-details-section"></div>
     <div class="flex items-center justify-between mb-3">
@@ -164,6 +192,10 @@ export async function renderHuntEditor(container, state, navigate) {
 
   renderDetails()
   renderLocations()
+
+  container.querySelector('#copy-path')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(`${store.userId}/${huntSpaceId}`)
+  })
 
   container.querySelector('#back-btn').addEventListener('click', () => {
     poller?.stop()

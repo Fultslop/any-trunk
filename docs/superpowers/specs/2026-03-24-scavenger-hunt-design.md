@@ -1,7 +1,7 @@
 # Scavenger Hunt App — Design Spec
 
 **Date:** 2026-03-24
-**Scope:** Organizer-side scavenger hunt app demonstrating multi-service selection, JSON Schema-driven forms, and full CRUD on structured data files. Built as the AnyTrunk reference app and developer template. Participant flow is out of scope.
+**Scope:** Organizer-side scavenger hunt app demonstrating multi-service selection, JSON Schema-driven forms, and full CRUD on structured data files. Built as the AnyTrunk reference app and developer template. Participant flow is out of scope for this iteration.
 
 ---
 

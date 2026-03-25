@@ -24,7 +24,9 @@ export async function renderSpaceList(container, state, navigate) {
     container.innerHTML = `
       <div class="flex items-center justify-between mb-6">
         <div class="text-sm text-gray-500">
-          ${service.icon} Connected as <strong>${store.userId}</strong>
+          ${service.faviconUrl
+              ? `<img src="${service.faviconUrl}" class="inline w-4 h-4 align-middle mr-1" alt="${service.label}">`
+              : service.icon + ' '}Connected as <strong>${store.userId}</strong>
         </div>
         <button id="switch-service" class="text-sm text-violet-600 hover:underline">Switch service</button>
       </div>

@@ -17,7 +17,9 @@ export function renderServiceSelect(container, state, navigate) {
               ${s.id === selectedService.id
                 ? 'border-violet-600 bg-violet-50'
                 : 'border-gray-200 bg-white hover:border-gray-300'}">
-            <span class="text-2xl">${s.icon}</span>
+            ${s.faviconUrl
+              ? `<img src="${s.faviconUrl}" class="w-8 h-8 flex-shrink-0" alt="${s.label}">`
+              : `<span class="text-2xl flex-shrink-0">${s.icon}</span>`}
             <div>
               <div class="font-semibold text-sm">${s.label}</div>
               <div class="text-xs text-gray-500">${s.hint}</div>
